@@ -1,0 +1,72 @@
+SICP in SML/NJ
+
+This is a translation of source code from SICP [1] into SML/NJ [2].
+
+
+== Status
+
+Currently, the following sections are translated:
+
+1  Building Abstractions with Procedures
+ 1.1  The Elements of Programming:
+ => chap1_1.sml
+ 1.2  Procedures and the Processes They Generate
+ => chap1_2.sml
+ 1.3  Formulating Abstractions with Higher-Order Procedures
+ => chap1_3.sml
+
+2  Building Abstractions with Data
+ 2.1  Introduction to Data Abstraction
+ => chap2_1.sml
+ 2.2  Hierarchical Data and the Closure Property
+ => chap2_2.sml
+  2.2.4  Example: A Picture Language
+  => chap2_2_4_smltk.sml
+     (sml_tk [3] is used to implement them.)
+ 2.3  Symbolic Data
+ => chap2_3.sml
+ 2.4  Multiple Representations for Abstract Data
+ => chap2_4.sml
+ 2.5  Systems with Generic Operations
+ => chap2_5.sml
+
+3  Modularity, Objects, and State
+ 3.1  Assignment and Local State
+ => chap3_1.sml
+ 3.2  The Environment Model of Evaluation
+ => chap3_2.sml
+ 3.3  Modeling with Mutable Data
+ => chap3_3.sml
+ 3.4  Concurrency: Time Is of the Essence
+ => chap3_4.sml
+ 3.5  Streams
+ => chap3_5.sml
+  3.5.2  Infinite Streams (Defining streams implicitly)
+  => chap3_5_lazy.sml
+     (The lazy evaluation feature of SML/NJ is used.)
+
+4  Metalinguistic Abstraction
+=> not translated yet
+
+5  Computing with Register Machines
+=> not translated yet
+
+
+=== References and links
+
+[1] Harold Abelson, Gerald Jay Sussman, and Julie Sussman.
+    Structure and Interpretation of Computer Programs.
+    MIT Press and McGraw-Hill, second Edition, 1996.
+    http://mitpress.mit.edu/sicp/
+
+[2] Standard ML of New Jersey
+    http://www.smlnj.org/
+
+[3] sml_tk
+    http://www.informatik.uni-bremen.de/~cxl/sml_tk/
+
+[4] Topics:SICP in other languages - CTMWiki
+    http://www.codepoetics.com/wiki/index.php?title=Topics:SICP_in_other_languages
+
+[5] Eli Bendersky’s website >> SICP
+    http://eli.thegreenplace.net/category/programming/lisp/sicp/
