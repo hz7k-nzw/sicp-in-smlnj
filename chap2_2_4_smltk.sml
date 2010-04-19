@@ -4,7 +4,11 @@
  *
  * Dependency: util.sml;
  *
- * Notice: the following code runs under *sml_tk*.
+ * Notice: The following code runs under *sml_tk*.
+ * To allow compilation (on SML/NJ) with the latest SML Basis
+ * Library (v110.72), some patches neeed to be applied to the
+ * sml_tk sources. See the following URL for detail:
+ * http://www.asahi-net.or.jp/~hz7k-nzw/sml_tk/index.html
  *)
 
 structure U = Util;
