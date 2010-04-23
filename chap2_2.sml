@@ -83,9 +83,9 @@ forEach (fn x => print (Int.toString x ^ "\n")) [1,2,3,4];
 (* 2.2.2  Hierarchical Structures *)
 
 structure Tree = struct
-  datatype tree = Nil
-                | Leaf of int
-                | Node of tree * tree
+  datatype t = Nil
+             | Leaf of int
+             | Node of t * t
 
   fun len Nil           = 0
     | len (Node (_, y)) = 1 + len y
