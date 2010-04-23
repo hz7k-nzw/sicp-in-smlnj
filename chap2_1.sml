@@ -94,7 +94,7 @@ structure Rat''' :> RAT = struct
     | makeRat (n, d) = (n, d)
 
   fun numer ((n, d):t) = let val g = I.gcd (n, d)
-                        in n div g end
+                         in n div g end
 
   fun denom ((n, d):t) = let val g = I.gcd (n, d)
                          in d div g end
@@ -111,17 +111,17 @@ RO.toString (RO.addRat (oneThird, oneThird));
 (* 2.1.3  What Is Meant by Data? *)
 
 signature PAIR = sig
-  type 'a pair
-  val cons : 'a * 'a -> 'a pair
-  val car : 'a pair -> 'a
-  val cdr : 'a pair -> 'a
+  type 'a t
+  val cons : 'a * 'a -> 'a t
+  val car : 'a t -> 'a
+  val cdr : 'a t -> 'a
 end;
 
 structure FunAsPair :> PAIR  = struct
   datatype msg = Car | Cdr
-  type 'a pair = msg -> 'a
+  type 'a t = msg -> 'a
 
-  fun cons (x, y) : 'a pair =
+  fun cons (x, y) : 'a t =
       let
         fun dispatch Car = x
           | dispatch Cdr = y
@@ -129,9 +129,9 @@ structure FunAsPair :> PAIR  = struct
         dispatch
       end
 
-  fun car (z:'a pair) = z Car
+  fun car (z:'a t) = z Car
 
-  fun cdr (z:'a pair) = z Cdr
+  fun cdr (z:'a t) = z Cdr
 
 end;
 
@@ -141,9 +141,9 @@ Pair.car x;
 Pair.cdr x;
 
 structure TupleAsPair :> PAIR  = struct
-  type 'a pair = 'a * 'a
+  type 'a t = 'a * 'a
 
-  fun cons (x, y) : 'a pair = (x, y)
+  fun cons (x, y) : 'a t = (x, y)
 
   fun car (x, _) = x
 
@@ -161,13 +161,13 @@ Pair.cdr x;
 functor IntervalFn (Pair : PAIR) = struct
   open Pair
 
-  fun makeInterval (x:real, y:real) : real pair =
+  fun makeInterval (x:real, y:real) : real t =
       if x > y then raise Fail "illegal order"
       else cons (x, y);
 
-  fun lowerBound (interval:real pair) = car interval
+  fun lowerBound (interval:real t) = car interval
 
-  fun upperBound (interval:real pair) = cdr interval
+  fun upperBound (interval:real t) = cdr interval
 
   fun addInterval (x, y) =
       makeInterval ((lowerBound x) + (lowerBound y),
