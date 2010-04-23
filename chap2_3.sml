@@ -24,68 +24,68 @@ structure R = Util.Real;
 (* 2.3.2  Example: Symbolic Differentiation *)
 
 signature EXP = sig
-  datatype exp = Num of int
-               | Var of string
-               | Sum of exp * exp
-               | Product of exp * exp
-
-  val number : exp -> bool
-  val variable : exp -> bool
-  val sameVariable : exp * exp -> bool
-  val sum : exp -> bool
-  val addend : exp -> exp
-  val augend : exp -> exp
-  val makeSum : exp * exp -> exp
-  val product : exp -> bool
-  val multiplier : exp -> exp
-  val multiplicand : exp -> exp
-  val makeProduct : exp * exp -> exp
+  type t
+  val zero : t
+  val one : t
+  val isNumber : t -> bool
+  val makeNumber : int -> t
+  val isVariable : t -> bool
+  val isSameVariable : t * t -> bool
+  val makeVariable : string -> t
+  val isSum : t -> bool
+  val addend : t -> t
+  val augend : t -> t
+  val makeSum : t * t -> t
+  val isProduct : t -> bool
+  val multiplier : t -> t
+  val multiplicand : t -> t
+  val makeProduct : t * t -> t
+  val toString : t -> string
 end;
 
 functor ExpOpsFn (E : EXP) = struct
-  structure E = E
-
+  open E
   fun deriv (exp, var) =
-      if E.number exp then E.Num 0
-      else if E.variable exp then
-        if E.sameVariable (exp, var) then E.Num 1
-        else E.Num 0
-      else if E.sum exp then
-        E.makeSum (deriv (E.addend exp, var),
-                   deriv (E.augend exp, var))
-      else if E.product exp then
-        E.makeSum (E.makeProduct (E.multiplier exp,
-                                  deriv (E.multiplicand exp, var)),
-                   E.makeProduct (deriv (E.multiplier exp, var),
-                                  E.multiplicand exp))
+      if isNumber exp then zero
+      else if isVariable exp then
+        if isSameVariable (exp, var) then one
+        else zero
+      else if isSum exp then
+        makeSum (deriv (addend exp, var),
+                 deriv (augend exp, var))
+      else if isProduct exp then
+        makeSum (makeProduct (multiplier exp,
+                              deriv (multiplicand exp, var)),
+                 makeProduct (deriv (multiplier exp, var),
+                              multiplicand exp))
       else
         raise Fail "Unknown exp"
-
-  fun toString (E.Num r) = Int.toString r
-    | toString (E.Var x) = x
-    | toString (E.Sum (a1, a2)) =
-      "<+ " ^ toString a1 ^ " " ^ toString a2 ^ ">"
-    | toString (E.Product (m1, m2)) =
-      "<* " ^ toString m1 ^ " " ^ toString m2 ^ ">"
 end;
 
 structure Exp' :> EXP = struct
-  datatype exp = Num of int
-               | Var of string
-               | Sum of exp * exp
-               | Product of exp * exp
+  datatype t = Num of int
+             | Var of string
+             | Sum of t * t
+             | Product of t * t
 
-  fun number (Num _) = true
-    | number _ = false
+  val zero = Num 0
+  val one  = Num 1
 
-  fun variable (Var _) = true
-    | variable _ = false
+  fun isNumber (Num _) = true
+    | isNumber _ = false
 
-  fun sameVariable (Var x, Var y) = x = y
-    | sameVariable (_, _) = false
+  val makeNumber = Num
 
-  fun sum (Sum (_, _)) = true
-    | sum _ = false
+  fun isVariable (Var _) = true
+    | isVariable _ = false
+
+  fun isSameVariable (Var x, Var y) = x = y
+    | isSameVariable (_, _) = false
+
+  val makeVariable = Var
+
+  fun isSum (Sum (_, _)) = true
+    | isSum _ = false
 
   fun addend (Sum (x, _)) = x
     | addend _ = raise Match
@@ -93,10 +93,10 @@ structure Exp' :> EXP = struct
   fun augend (Sum (_, y)) = y
     | augend _ = raise Match
 
-  fun makeSum (a1, a2) = Sum (a1, a2)
+  val makeSum = Sum
 
-  fun product (Product (_, _)) = true
-    | product _ = false
+  fun isProduct (Product (_, _)) = true
+    | isProduct _ = false
 
   fun multiplier (Product (x, _)) = x
     | multiplier _ = raise Match
@@ -104,40 +104,54 @@ structure Exp' :> EXP = struct
   fun multiplicand (Product (_, y)) = y
     | multiplicand _ = raise Match
 
-  fun makeProduct (m1, m2) = Product (m1, m2)
+  val makeProduct = Product
+
+  fun toString (Num r) = Int.toString r
+    | toString (Var x) = x
+    | toString (Sum (a1, a2)) =
+      "[+ " ^ toString a1 ^ " " ^ toString a2 ^ "]"
+    | toString (Product (m1, m2)) =
+      "[* " ^ toString m1 ^ " " ^ toString m2 ^ "]"
 end;
 
 structure EO = ExpOpsFn (Exp');
 
-val x = EO.E.Var "x";
-val y = EO.E.Var "y";
-val three = EO.E.Num 3;
+val x = EO.makeVariable "x";
+val y = EO.makeVariable "y";
+val three = EO.makeNumber 3;
 
-(* (deriv '<+ x 3> 'x) *)
-EO.toString (EO.deriv (EO.E.Sum (x, three), x));
-(* (deriv '<* x y> 'x) *)
-EO.toString (EO.deriv (EO.E.Product (x, y), x));
-(* (deriv '<* <* x y> <+ x 3>> 'x) *)
-EO.toString (EO.deriv (EO.E.Product (EO.E.Product (x, y),
-                                     EO.E.Sum (x, three)), x));
+(* (deriv '[+ x 3] 'x) *)
+EO.toString (EO.deriv (EO.makeSum (x, three), x));
+(* (deriv '[* x y] 'x) *)
+EO.toString (EO.deriv (EO.makeProduct (x, y), x));
+(* (deriv '[* [* x y] [+ x 3]] 'x) *)
+EO.toString (EO.deriv (EO.makeProduct (EO.makeProduct (x, y),
+                                       EO.makeSum (x, three)), x));
 
 structure Exp'' :> EXP = struct
-  datatype exp = Num of int
-               | Var of string
-               | Sum of exp * exp
-               | Product of exp * exp
+  datatype t = Num of int
+             | Var of string
+             | Sum of t * t
+             | Product of t * t
 
-  fun number (Num _) = true
-    | number _ = false
+  val zero = Num 0
+  val one  = Num 1
 
-  fun variable (Var _) = true
-    | variable _ = false
+  fun isNumber (Num _) = true
+    | isNumber _ = false
 
-  fun sameVariable (Var x, Var y) = x = y
-    | sameVariable (_, _) = false
+  val makeNumber = Num
 
-  fun sum (Sum (_, _)) = true
-    | sum _ = false
+  fun isVariable (Var _) = true
+    | isVariable _ = false
+
+  fun isSameVariable (Var x, Var y) = x = y
+    | isSameVariable (_, _) = false
+
+  val makeVariable = Var
+
+  fun isSum (Sum (_, _)) = true
+    | isSum _ = false
 
   fun addend (Sum (x, _)) = x
     | addend _ = raise Match
@@ -150,8 +164,8 @@ structure Exp'' :> EXP = struct
     | makeSum (Num n1, Num n2) = Num (n1 + n2)
     | makeSum (a1, a2) = Sum (a1, a2)
 
-  fun product (Product (_, _)) = true
-    | product _ = false
+  fun isProduct (Product (_, _)) = true
+    | isProduct _ = false
 
   fun multiplier (Product (x, _)) = x
     | multiplier _ = raise Match
@@ -165,40 +179,47 @@ structure Exp'' :> EXP = struct
     | makeProduct (m1, Num 1) = m1
     | makeProduct (Num n1, Num n2) = Num (n1 * n2)
     | makeProduct (m1, m2) = Product (m1, m2)
+
+  fun toString (Num r) = Int.toString r
+    | toString (Var x) = x
+    | toString (Sum (a1, a2)) =
+      "[+ " ^ toString a1 ^ " " ^ toString a2 ^ "]"
+    | toString (Product (m1, m2)) =
+      "[* " ^ toString m1 ^ " " ^ toString m2 ^ "]"
 end;
 
 structure EO = ExpOpsFn (Exp'');
 
-val x = EO.E.Var "x";
-val y = EO.E.Var "y";
-val three = EO.E.Num 3;
+val x = EO.makeVariable "x";
+val y = EO.makeVariable "y";
+val three = EO.makeNumber 3;
 
-(* (deriv '<+ x 3> 'x) *)
-EO.toString (EO.deriv (EO.E.Sum (x, three), x));
-(* (deriv '<* x y> 'x) *)
-EO.toString (EO.deriv (EO.E.Product (x, y), x));
-(* (deriv '<* <* x y> <+ x 3>> 'x) *)
-EO.toString (EO.deriv (EO.E.Product (EO.E.Product (x, y),
-                                     EO.E.Sum (x, three)), x));
+(* (deriv '[+ x 3] 'x) *)
+EO.toString (EO.deriv (EO.makeSum (x, three), x));
+(* (deriv '[* x y] 'x) *)
+EO.toString (EO.deriv (EO.makeProduct (x, y), x));
+(* (deriv '[* [* x y] [+ x 3]] 'x) *)
+EO.toString (EO.deriv (EO.makeProduct (EO.makeProduct (x, y),
+                                       EO.makeSum (x, three)), x));
 
 (* 2.3.3  Example: Representing Sets *)
 
 signature SET =
 sig
-  type t
+  type v
   type set
-  val elementOf : t * set -> bool
-  val adjoin : t * set -> set
+  val elementOf : v * set -> bool
+  val adjoin : v * set -> set
   val intersection : set * set -> set
   val union : set * set -> set
 end;
 
 structure IntSetAsUnorderedList : SET = struct
-  type t = int
-  type set = t list
+  type v = int
+  type set = v list
 
-  fun elementOf (x:t, nil) = false
-    | elementOf (x:t, h::t) = x = h orelse elementOf (x, t)
+  fun elementOf (x:v, nil) = false
+    | elementOf (x:v, h::t) = x = h orelse elementOf (x, t)
 
   fun adjoin (x, set) =
       if elementOf (x, set) then set
@@ -227,8 +248,8 @@ S.intersection ([1,2,3],[2,3,4,5,6,7]);
 S.union ([1,2,3],[2,3,4,5,6,7]);
 
 structure IntSetAsOrderedList : SET = struct
-  type t = int
-  type set = t list
+  type v = int
+  type set = v list
 
   fun elementOf (x, nil) = false
     | elementOf (x, h::t) =
@@ -268,9 +289,9 @@ S.union ([1,2,3],[2,3,4,5,6,7]);
 
 structure BinTree =
 struct
-  datatype 'a tree = Nil
-                   (* Node: entry * left * right *)
-                   | Node of 'a * 'a tree * 'a tree
+  datatype 'a t = Nil
+                (* Node: entry * left * right *)
+                | Node of 'a * 'a t * 'a t
 
   fun toList1 Nil = nil
     | toList1 (Node (e, lb, rb)) =
@@ -316,8 +337,8 @@ end;
 structure IntSetAsBinTree : SET = struct
   structure T = BinTree
 
-  type t = int
-  type set = t T.tree
+  type v = int
+  type set = v T.t
 
   fun elementOf (x, T.Nil) = false
     | elementOf (x, T.Node (e, lb, rb)) =
@@ -396,11 +417,11 @@ lookupTree #1 (4, db);
 (* 2.3.4  Example: Huffman Encoding Trees *)
 
 structure HuffmanTree = struct
-  datatype ''a tree
+  datatype ''a t
     (* Leaf: symbol * weight *)
     = Leaf of ''a * int
     (* Node: symbol list * weight * left * right *)
-    | Node of ''a list * int * ''a tree * ''a tree
+    | Node of ''a list * int * ''a t * ''a t
 
   fun makeCodeTree (left, right) =
       Node ((symbols left) @ (symbols right),
