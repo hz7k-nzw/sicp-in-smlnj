@@ -17,36 +17,61 @@ structure R = Util.Real;
  * Immutable version of PAIR has been defined in chap2_1.sml
  *)
 signature PAIR = sig
-  type 'a pair
-  val cons : 'a * 'a -> 'a pair
-  val car : 'a pair -> 'a
-  val cdr : 'a pair -> 'a
-  val setCar : 'a pair -> 'a -> unit (* added *)
-  val setCdr : 'a pair -> 'a -> unit (* added *)
+  type 'a t
+  val cons : 'a * 'a -> 'a t
+  val car : 'a t -> 'a
+  val cdr : 'a t -> 'a
+  val setCar : 'a t -> 'a -> unit (* added *)
+  val setCdr : 'a t -> 'a -> unit (* added *)
 end;
 
-functor SexpFn (P : PAIR) =
+signature SEXP =
+sig
+  type t
+  val null : t
+  val int : int -> t
+  val str : string -> t
+  val cons : t * t -> t
+  val car : t -> t
+  val cdr : t -> t
+  val setCar : t -> t -> unit
+  val setCdr : t -> t -> unit
+  val isNull : t -> bool
+  val list : t list -> t
+  val lastPair : t -> t
+  val append : t * t -> t
+  val append' : t * t -> t
+  val toString : t -> string
+end;
+
+functor SexpFn (Pair : PAIR) :> SEXP =
 struct
   datatype t = Nil
              | Int of int
              | Str of string
-             | Pair of t P.pair
+             | Cons of t Pair.t
 
-  fun cons (x, y) = Pair (P.cons (x, y))
+  val null = Nil
 
-  fun car (Pair p) = P.car p
+  val int = Int
+
+  val str = Str
+
+  fun cons (x, y) = Cons (Pair.cons (x, y))
+
+  fun car (Cons p) = Pair.car p
     | car Nil = raise Empty
     | car _ = raise Match
 
-  fun cdr (Pair p) = P.cdr p
+  fun cdr (Cons p) = Pair.cdr p
     | cdr Nil = raise Empty
     | cdr _ = raise Match
 
-  fun setCar (Pair p) newVal = P.setCar p newVal
+  fun setCar (Cons p) newVal = Pair.setCar p newVal
     | setCar Nil _ = raise Empty
     | setCar _ _ = raise Match
 
-  fun setCdr (Pair p) newVal = P.setCdr p newVal
+  fun setCdr (Cons p) newVal = Pair.setCdr p newVal
     | setCdr Nil _ = raise Empty
     | setCdr _ _ = raise Match
 
@@ -74,19 +99,19 @@ struct
         fun s1 Nil      = "()"
           | s1 (Int i)  = Int.toString i
           | s1 (Str s)  = s
-          | s1 (Pair p) = "(" ^ s1 (P.car p) ^ s2 (P.cdr p) ^ ")"
+          | s1 (Cons p) = "(" ^ s1 (Pair.car p) ^ s2 (Pair.cdr p) ^ ")"
         and s2 Nil      = ""
           | s2 (Int i)  = " . " ^ Int.toString i
           | s2 (Str s)  = " . " ^ s
-          | s2 (Pair p) = " " ^ s1 (P.car p) ^ s2 (P.cdr p)
+          | s2 (Cons p) = " " ^ s1 (Pair.car p) ^ s2 (Pair.cdr p)
       in
         s1 x
       end
 end;
 
-structure TupleAsPair :> PAIR =
+structure PairAsTuple :> PAIR =
 struct
-  type 'a pair = 'a ref * 'a ref
+  type 'a t = 'a ref * 'a ref
 
   fun cons (x, y) = (ref x, ref y)
 
@@ -99,12 +124,12 @@ struct
   fun setCdr (_, yRef) newVal = yRef := newVal
 end;
 
-structure S = SexpFn (TupleAsPair);
+structure S = SexpFn (PairAsTuple);
 
-val one = S.Int 1;
-val two =  S.Int 2;
-val three = S.Int 3;
-val four = S.Int 4;
+val one = S.int 1;
+val two =  S.int 2;
+val three = S.int 3;
+val four = S.int 4;
 
 val x = S.list [one, two];
 val y = S.list [three, four];
@@ -129,7 +154,7 @@ fun mystery x =
                S.setCdr x y; loop (temp, x)
              end)
     in
-      loop (x, S.Nil)
+      loop (x, S.null)
     end;
 
 val v = S.list [one, two, three, four];
@@ -150,7 +175,7 @@ val z2 = S.cons (S.list [one, two], S.list [one, two]);
 
 fun setToWow x =
     let
-      val wow = S.Str "wow"
+      val wow = S.str "wow"
     in
       S.setCar (S.car x) wow; x
     end;
@@ -161,10 +186,10 @@ S.toString (setToWow z1);
 S.toString z2;
 S.toString (setToWow z2);
 
-structure FunAsPair :> PAIR  = struct
+structure PairAsFun :> PAIR  = struct
   datatype msg = Car | Cdr | SetCar | SetCdr
   datatype 'a ret = Val of 'a | Setter of 'a -> unit
-  type 'a pair = msg -> 'a ret
+  type 'a t = msg -> 'a ret
 
   fun cons (x, y) =
       let
@@ -199,11 +224,11 @@ structure FunAsPair :> PAIR  = struct
         | _        => raise Match
 end;
 
-structure S = SexpFn (FunAsPair);
+structure S = SexpFn (PairAsFun);
 
-val one = S.Int 1;
-val two =  S.Int 2;
-val seventeen = S.Int 17;
+val one = S.int 1;
+val two =  S.int 2;
+val seventeen = S.int 17;
 
 val x = S.cons (one, two);
 val z = S.cons (x, x);
