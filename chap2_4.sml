@@ -111,9 +111,9 @@ structure Complex''' :> COMPLEX = struct
   structure R = Complex'
   structure P = Complex''
 
-  fun makeFromRealImag (x, y) = Rectangular (x, y)
+  val makeFromRealImag = Rectangular
 
-  fun makeFromMagAng (r, a) = Polar (r, a)
+  val makeFromMagAng = Polar
 
   fun realPart (Rectangular (x, y)) = R.realPart (x, y)
     | realPart (Polar (r, a)) = P.realPart (r, a)
