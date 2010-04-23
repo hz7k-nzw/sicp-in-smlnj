@@ -117,7 +117,7 @@ signature PAIR = sig
   val cdr : 'a t -> 'a
 end;
 
-structure FunAsPair :> PAIR  = struct
+structure PairAsFun :> PAIR  = struct
   datatype msg = Car | Cdr
   type 'a t = msg -> 'a
 
@@ -135,12 +135,12 @@ structure FunAsPair :> PAIR  = struct
 
 end;
 
-structure Pair = FunAsPair;
+structure Pair = PairAsFun;
 val x = Pair.cons (1, 2);
 Pair.car x;
 Pair.cdr x;
 
-structure TupleAsPair :> PAIR  = struct
+structure PairAsTuple :> PAIR  = struct
   type 'a t = 'a * 'a
 
   fun cons (x, y) : 'a t = (x, y)
@@ -151,7 +151,7 @@ structure TupleAsPair :> PAIR  = struct
 
 end;
 
-structure Pair = TupleAsPair;
+structure Pair = PairAsTuple;
 val x = Pair.cons (1, 2);
 Pair.car x;
 Pair.cdr x;
@@ -198,7 +198,7 @@ functor IntervalFn (Pair : PAIR) = struct
 
 end;
 
-structure Interval = IntervalFn (FunAsPair);
+structure Interval = IntervalFn (PairAsFun);
 val x = Interval.makeInterval (1.0, 2.0);
 val y = Interval.makeInterval (2.0, 3.0);
 Interval.toString x;
@@ -208,7 +208,7 @@ Interval.toString (Interval.mulInterval (x, y));
 Interval.toString (Interval.divInterval (x, y));
 
 
-structure Interval = IntervalFn (TupleAsPair);
+structure Interval = IntervalFn (PairAsTuple);
 (* 6.8-ohm 10% *)
 val x = Interval.makeInterval (6.12, 7.48);
 (* 4.7-ohm 5% *)
