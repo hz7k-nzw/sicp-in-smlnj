@@ -34,8 +34,13 @@ sig
   val bool : bool -> obj
   val int : int -> obj
   val str : string -> obj
-  val subr : string * (obj list -> obj) -> obj
-  val expr : obj list * obj * obj -> obj
+  val subr0 : string * (unit -> obj) -> obj
+  val subr1 : string * (obj -> obj) -> obj
+  val subr2 : string * (obj * obj -> obj) -> obj
+  val subr0R : string * (obj list -> obj) -> obj
+  val subr1R : string * (obj * obj list -> obj) -> obj
+  val subr2R : string * (obj * obj * obj list -> obj) -> obj
+  val expr : obj * obj * obj -> obj
   val inputStream : TextIO.instream -> obj
   val outputSream : TextIO.outstream -> obj
 
@@ -99,15 +104,9 @@ sig
   (* for subr (primitive procedure) *)
   val subrName : obj -> string
   val applySubr : obj -> obj list -> obj
-  val subr0 : string * (unit -> obj) -> obj
-  val subr1 : string * (obj -> obj) -> obj
-  val subr2 : string * (obj * obj -> obj) -> obj
-  val subr0R : string * (obj list -> obj) -> obj
-  val subr1R : string * (obj * obj list -> obj) -> obj
-  val subr2R : string * (obj * obj * obj list -> obj) -> obj
 
   (* for expr (compound procedure) *)
-  val exprParams : obj -> obj list
+  val exprParams : obj -> obj
   val exprBody : obj -> obj
   val exprEnv : obj -> obj
 
@@ -274,7 +273,7 @@ struct
         eval (Syntax.ifAlternative exp) env
 
   and evalLambda exp env =
-      Lisp.expr (Lisp.toList (Syntax.lambdaParameters exp),
+      Lisp.expr (Syntax.lambdaParameters exp,
                  Syntax.lambdaBody exp,
                  env)
 
@@ -303,7 +302,7 @@ struct
         let
           val body = Lisp.exprBody proc
           val env = Lisp.exprEnv proc
-          val params = Lisp.exprParams proc
+          val params = Lisp.toList (Lisp.exprParams proc)
         in
           evalSequence body (Lisp.extendEnv env (params, args))
         end
@@ -632,7 +631,7 @@ struct
              p ">")
         and pExpr obj =
             let
-              val params = Lisp.fromList (Lisp.exprParams obj)
+              val params = Lisp.exprParams obj
               val body = Lisp.exprBody obj
             in
               (p "#<Expr: ";
@@ -789,9 +788,9 @@ struct
       end
   (*
    * Exercise 4.16
-   * XXX: I placed scanOutDefines in the body of makeLambda
-   * because both makeProcedure and procedureBody are
-   * included in LispFn functor, from which the functions
+   * I placed scanOutDefines in the body of makeLambda because
+   * both expr (make-procedure) and exprBody (procedure-body)
+   * are included in LispFn functor, from which the functions
    * declared in LispSyntaxFn functor cannot be called.
    *)
   and scanOutDefines body =
@@ -1252,7 +1251,7 @@ struct
                | Int of int
                | Str of string
                | Subr of int * string * (obj list -> obj)
-               | Expr of int * obj list * obj * obj
+               | Expr of int * obj * obj * obj
                | InputStream of int * TextIO.instream
                | OutputStream of int * TextIO.outstream
                | Environment of int * (obj, obj) Env.t
@@ -1320,11 +1319,28 @@ struct
   and bool b = Bool b
   and int i = Int i
   and str s = Str s
-  and subr (name, p) = Subr (inc (), name, p)
+  and subr (name, p) = Subr (inc (), name, p) (* not exported *)
+  and subr0 (name, proc) =
+      subr (name, fn [] => proc ()
+                   | args => argsError (name, args, 0))
+  and subr1 (name, proc) =
+      subr (name, fn [x1] => proc x1
+                   | args => argsError (name, args, 1))
+  and subr2 (name, proc) =
+      subr (name, fn [x1,x2] => proc (x1,x2)
+                   | args => argsError (name, args, 2))
+  and subr0R (name, proc) =
+      subr (name, fn xs => proc xs)
+  and subr1R (name, proc) =
+      subr (name, fn (x1::xs) => proc (x1,xs)
+                   | args => argsError (name, args, 1))
+  and subr2R (name, proc) =
+      subr (name, fn (x1::x2::xs) => proc (x1,x2,xs)
+                   | args => argsError (name, args, 2))
   and expr (params, body, env) = Expr (inc (), params, body, env)
   and inputStream is = InputStream (inc (), is)
   and outputSream os = OutputStream (inc (), os)
-  and environment e = Environment (inc (), e)
+  and environment e = Environment (inc (), e) (* not exported *)
 
   (* obj <-> list *)
   and fromList nil = Nil
@@ -1445,23 +1461,6 @@ struct
     | subrName obj = typeError (t_subr, obj)
   fun applySubr (Subr (_,_,p)) vs = p vs
     | applySubr obj _ = typeError (t_subr, obj)
-  fun subr0 (name, proc) =
-      subr (name, fn [] => proc ()
-                   | args => argsError (name, args, 0))
-  fun subr1 (name, proc) =
-      subr (name, fn [x1] => proc x1
-                   | args => argsError (name, args, 1))
-  fun subr2 (name, proc) =
-      subr (name, fn [x1,x2] => proc (x1,x2)
-                   | args => argsError (name, args, 2))
-  fun subr0R (name, proc) =
-      subr (name, fn xs => proc xs)
-  fun subr1R (name, proc) =
-      subr (name, fn (x1::xs) => proc (x1,xs)
-                   | args => argsError (name, args, 1))
-  fun subr2R (name, proc) =
-      subr (name, fn (x1::x2::xs) => proc (x1,x2,xs)
-                   | args => argsError (name, args, 2))
 
   (* for expr (compound procedure) *)
   fun exprParams (Expr (_,params,_,_)) = params
@@ -2342,7 +2341,7 @@ struct
         val vars = Syntax.lambdaParameters exp
         val bproc = analyzeSequence (Syntax.lambdaBody exp)
       in
-        (fn env => Lisp.expr (Lisp.toList vars,
+        (fn env => Lisp.expr (vars,
                               Lisp.subr1 ("bproc", bproc),
                               env))
       end
@@ -2376,11 +2375,12 @@ struct
         Lisp.applySubr proc args
       else if Lisp.isExpr proc then
         let
+          (* params *)
+          val params = Lisp.toList (Lisp.exprParams proc)
           (* body: represented as procedure (env -> obj) *)
           val body = Lisp.exprBody proc
           (* env: environment to which body is applied *)
-          val env = Lisp.extendEnv (Lisp.exprEnv proc)
-                                   (Lisp.exprParams proc, args)
+          val env = Lisp.extendEnv (Lisp.exprEnv proc) (params, args)
         in
           Lisp.applySubr body [env]
         end
