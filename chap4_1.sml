@@ -2120,6 +2120,23 @@ struct
   fun bye () =
       Printer.format (stdOut, "Bye!~%", nil)
 
+  fun onError (Lisp.Error (ctrlstr,args), cont) =
+      let
+        val msg = "Runtime error: " ^ ctrlstr ^ "~%"
+      in
+        Printer.format (stdErr, msg, args);
+        cont ()
+      end
+    | onError (IO.Io {name,function,cause}, cont) =
+      let
+        val msg = "IO error: " ^ name ^ " -- " ^ function ^
+                  " (cause: " ^ exnMessage cause ^ ")~%"
+      in
+        Printer.format (stdErr, msg, nil);
+        cont ()
+      end
+    | onError (e, _) = raise e
+
   fun repl () =
       let
         val env = setupEnv ()
@@ -2138,22 +2155,7 @@ struct
                   loop ()
                 end
             end
-            handle Lisp.Error (ctrlstr,args) =>
-                   let
-                     val msg = "Runtime error: " ^ ctrlstr ^ "~%"
-                   in
-                     Printer.format (stdErr, msg, args);
-                     loop ()
-                   end
-                 | IO.Io {name,function,cause} =>
-                   let
-                     val msg = "IO error: " ^ name ^ " -- " ^ function ^
-                               " (cause: " ^ exnMessage cause ^ ")~%"
-                   in
-                     Printer.format (stdErr, msg, nil);
-                     loop ()
-                   end
-                 | e => raise e
+            handle e => onError (e, loop)
       in
         loop ()
       end
@@ -2300,6 +2302,7 @@ struct
             "120");
         print "done\n"
       end
+      handle e => onError (e, fn () => ())
 end;
 
 local
