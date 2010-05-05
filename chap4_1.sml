@@ -310,13 +310,13 @@ struct
         raise Lisp.Error ("Not a procedure -- apply: ~S",
                           [proc])
 
-  and listOfValues exp env =
-      if Lisp.isNull exp then
+  and listOfValues exps env =
+      if Lisp.isNull exps then
         nil
-      else if Lisp.isCons exp then
+      else if Lisp.isCons exps then
         let
-          val car = Lisp.car exp
-          val cdr = Lisp.cdr exp
+          val car = Lisp.car exps
+          val cdr = Lisp.cdr exps
           (* evaluates operands from left to right *)
           val v = eval car env
           val vs = listOfValues cdr env
@@ -325,7 +325,7 @@ struct
         end
       else
         raise Lisp.Error ("Improper sequence -- listOfValues: ~S",
-                          [exp])
+                          [exps])
 end;
 
 functor LispReaderFn (structure Lisp: LISP
