@@ -43,6 +43,7 @@ sig
   val expr : obj * obj * obj -> obj
   val inputStream : TextIO.instream -> obj
   val outputSream : TextIO.outstream -> obj
+  val thunk : obj * obj -> obj (* used in chap4_2.sml *)
 
   (* predicates for equality tests *)
   val eq : obj * obj -> bool
@@ -70,6 +71,7 @@ sig
   val isInputStream : obj -> bool
   val isOutputStream : obj -> bool
   val isEnv : obj -> bool
+  val isThunk : obj -> bool (* used in chap4_2.sml *)
 
   (* for cons *)
   val car : obj -> obj
@@ -120,6 +122,13 @@ sig
   val extendEnv : obj -> (obj list * obj list) -> obj
   val defineEnv : obj -> (obj * obj) -> obj
   val setEnv : obj -> (obj * obj) -> obj
+
+  (* for thunk: used in chap4_2.sml *)
+  val thunkExp : obj -> obj
+  val thunkEnv : obj -> obj
+  val thunkValue : obj -> obj
+  val setThunkValue : obj -> obj -> unit
+  val isEvaluated : obj -> bool
 end;
 
 signature LISP_SYNTAX =
@@ -584,6 +593,8 @@ struct
               pEnv obj
             else if Lisp.isUndef obj then
               pUndef obj
+            else if Lisp.isThunk obj then
+              pThunk obj
             else
               pUnknown obj
         and p2 obj =
@@ -613,6 +624,8 @@ struct
               (p " . "; pEnv obj)
             else if Lisp.isUndef obj then
               (p " . "; pUndef obj)
+            else if Lisp.isThunk obj then
+              (p " . "; pThunk obj)
             else
               (p " . "; pUnknown obj)
         and pSym obj =
@@ -646,6 +659,18 @@ struct
             p "#<Env>"
         and pUndef obj =
             p "#<Undef>"
+        and pThunk obj =
+            let
+              val evaluated = Lisp.isEvaluated obj
+              val content = if evaluated then Lisp.thunkValue obj
+                            else Lisp.thunkExp obj
+            in
+              (p "#<Thunk";
+               if evaluated then p "(evaluated): "
+               else p "(not evaluated): ";
+               p1 content;
+               p ">")
+            end
         and pUnknown obj =
             p "#<Unknown>"
       in
@@ -1255,6 +1280,10 @@ struct
                | InputStream of int * TextIO.instream
                | OutputStream of int * TextIO.outstream
                | Environment of int * (obj, obj) Env.t
+               | Thunk of int * thunk ref
+
+       and thunk = NotEvaluated of obj * obj
+                 | Evaluated of obj
 
   exception Error of string * obj list
 
@@ -1289,6 +1318,7 @@ struct
   val t_input_stream = Sym "input-stream"
   val t_output_stream = Sym "output-stream"
   val t_env = Sym "env"
+  val t_thunk = Sym "thunk"
 
   (* error functions *)
   fun typeError (expected, obj) =
@@ -1302,7 +1332,7 @@ struct
         val actual = length args
         val msg = if actual < expected then
                     "Too few arguments given to " ^ name ^
-                    " (expected " ^ Int.toString expected ^ ")"
+                    " (expected: " ^ Int.toString expected ^ ")"
                   else if expected < actual then
                     "Too many arguments given to " ^ name ^
                     " (expected: " ^ Int.toString expected ^ ")"
@@ -1312,6 +1342,17 @@ struct
       in
         raise Error (msg, nil)
       end
+
+  fun thunkError (expectedState, thunk) =
+      let
+        val msg = if expectedState then
+                    "Unexpected thunk (expected: evaluated): ~S"
+                  else
+                    "Unexpected thunk (expected: not evaluated): ~S"
+      in
+        raise Error (msg, [thunk])
+      end
+
 
   (* constructors *)
   fun cons (h, t) = Cons (ref h, ref t)
@@ -1341,6 +1382,7 @@ struct
   and inputStream is = InputStream (inc (), is)
   and outputSream os = OutputStream (inc (), os)
   and environment e = Environment (inc (), e) (* not exported *)
+  and thunk (exp, env) = Thunk (inc (), ref (NotEvaluated (exp, env)))
 
   (* obj <-> list *)
   and fromList nil = Nil
@@ -1363,6 +1405,7 @@ struct
     | eq (InputStream (id1,_), InputStream (id2,_)) = id1 = id2
     | eq (OutputStream (id1,_), OutputStream (id2,_)) = id1 = id2
     | eq (Environment (id1,_), Environment (id2,_)) = id1 = id2
+    | eq (Thunk (id1,_), Thunk (id2,_)) = id1 = id2
     | eq _ = false
   fun equal (Undef, Undef) = true
     | equal (Eof, Eof) = true
@@ -1378,6 +1421,7 @@ struct
     | equal (InputStream (id1,_), InputStream (id2,_)) = id1 = id2
     | equal (OutputStream (id1,_), OutputStream (id2,_)) = id1 = id2
     | equal (Environment (id1,_), Environment (id2,_)) = id1 = id2
+    | equal (Thunk (id1,_), Thunk (id2,_)) = id1 = id2
     | equal _ = false
 
   (* predicates for boolean tests *)
@@ -1413,6 +1457,8 @@ struct
     | isOutputStream _ = false
   fun isEnv (Environment _) = true
     | isEnv _ = false
+  fun isThunk (Thunk _) = true
+    | isThunk _ = false
 
   (* for cons *)
   fun car (Cons (h,_)) = !h
@@ -1518,6 +1564,33 @@ struct
               raise Error ("Env set failed: ~S, ~S (cause: " ^
                            exnMessage cause ^ ")", [var, value]))
     | setEnv obj _ = typeError (t_env, obj)
+
+  (* for thunk: used in chap4_2.sml *)
+  fun thunkExp (obj as Thunk (_,tref)) =
+      (case !tref of
+         NotEvaluated (exp,_) => exp
+       | Evaluated _ => thunkError (false, obj))
+    | thunkExp obj = typeError (t_thunk, obj)
+  fun thunkEnv (obj as Thunk (_,tref)) =
+      (case !tref of
+         NotEvaluated (_,env) => env
+       | Evaluated _ => thunkError (false, obj))
+    | thunkEnv obj = typeError (t_thunk, obj)
+  fun thunkValue (obj as Thunk (_,tref)) =
+      (case !tref of
+         NotEvaluated _ => thunkError (true, obj)
+       | Evaluated value => value)
+    | thunkValue obj = typeError (t_thunk, obj)
+  fun setThunkValue (obj as Thunk (_,tref)) value =
+      (case !tref of
+         NotEvaluated _ => tref := (Evaluated value)
+       | Evaluated _ => thunkError (false, obj))
+    | setThunkValue obj _ = typeError (t_thunk, obj)
+  fun isEvaluated (Thunk (_,tref)) =
+      (case !tref of
+         NotEvaluated _ => false
+       | Evaluated _ => true)
+    | isEvaluated obj = typeError (t_thunk, obj)
 end;
 
 structure Env :> ENV =
