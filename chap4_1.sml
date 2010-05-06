@@ -1838,12 +1838,16 @@ end;
 
 signature LISP_INTERPRETER =
 sig
+  (* exception raised when unit test is failed *)
+  exception Test
   (* activates new top-level *)
   val go : unit -> unit
   (* returns an executor for unit test *)
-  val ut : unit -> (string * string -> bool)
+  val ut : unit -> (string * string -> unit)
   (* run predefined unit tests *)
   val test : unit -> unit
+  (* error handler *)
+  val onError : exn * (unit -> 'a) -> 'a
 end;
 
 functor LispInterpreterFn (structure Lisp : LISP
@@ -1857,6 +1861,8 @@ functor LispInterpreterFn (structure Lisp : LISP
                            and type Evaluator.obj = Lisp.obj)
         : LISP_INTERPRETER =
 struct
+  exception Test
+
   val stdIn = Lisp.stdIn
   val stdOut = Lisp.stdOut
   val stdErr = Lisp.stdErr
@@ -2164,11 +2170,14 @@ struct
 
   fun ut () =
       let
+        val counter = ref 1
+        fun inc () = let val n = !counter in counter := n+1; n end
         val env = setupEnv ()
         val s2i = Lisp.inputStream o TextIO.openString
       in
         (fn (input, expected) =>
             let
+              val n = Lisp.int (inc ())
               val is = s2i input
               val is' = s2i expected
               val obj = Reader.read is
@@ -2177,15 +2186,14 @@ struct
               val ret' = Evaluator.eval obj' env
             in
               if Lisp.equal (ret, ret') then
-                (Printer.format (stdOut,
-                                 "OK: ~S -> ~S~%",
-                                 [obj, ret]);
-                 true)
+                Printer.format (stdOut,
+                                "[~S] OK: ~S -> ~S~%",
+                                [n, obj, ret])
               else
                 (Printer.format (stdOut,
-                                 "NG: ~S -> ~S; (expected: ~S)~%",
-                                 [obj, ret, ret']);
-                 false)
+                                 "[~S] NG: ~S -> ~S; (expected: ~S)~%",
+                                 [n, obj, ret, ret']);
+                 raise Test)
             end)
       end
 
