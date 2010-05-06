@@ -33,6 +33,7 @@ sig
   val sym : string -> obj
   val bool : bool -> obj
   val int : int -> obj
+  val real : real -> obj
   val str : string -> obj
   val subr0 : string * (unit -> obj) -> obj
   val subr1 : string * (obj -> obj) -> obj
@@ -64,7 +65,7 @@ sig
   val isBool : obj -> bool
   val isCons : obj -> bool
   val isSym : obj -> bool
-  val isInt : obj -> bool
+  val isNum : obj -> bool
   val isStr : obj -> bool
   val isSubr : obj -> bool
   val isExpr : obj -> bool
@@ -97,8 +98,22 @@ sig
   (* for bool *)
   val toBool : obj -> bool
 
-  (* for int *)
+  (* for num *)
+  val isInt : obj -> bool
+  val isReal : obj -> bool
   val toInt : obj -> int
+  val toReal : obj -> real
+  val negNum : obj -> obj
+  val addNum : (obj * obj) -> obj
+  val subNum : (obj * obj) -> obj
+  val mulNum : (obj * obj) -> obj
+  val quoNum : (obj * obj) -> obj
+  val remNum : (obj * obj) -> obj
+  val eqNum : (obj * obj) -> bool
+  val gtNum : (obj * obj) -> bool
+  val geNum : (obj * obj) -> bool
+  val ltNum : (obj * obj) -> bool
+  val leNum : (obj * obj) -> bool
 
   (* for string *)
   val toString : obj -> string
@@ -394,13 +409,25 @@ struct
       let
         val ss = Substring.full s
         val radix = StringCvt.DEC
+        fun parseInt ss =
+            case Int.scan radix Substring.getc ss of
+              SOME (i, ss') =>
+              if Substring.isEmpty ss' then SOME i
+              else NONE
+            | NONE => NONE
+        fun parseReal ss =
+              case Real.scan Substring.getc ss of
+                SOME (r, ss') =>
+                if Substring.isEmpty ss' then SOME r
+                else NONE
+              | NONE => NONE
       in
-        case Int.scan radix Substring.getc ss of
-          SOME (i, ss') => if Substring.isEmpty ss' then
-                             Lisp.int i
-                           else
-                             Lisp.sym s
-        | NONE => Lisp.sym s
+        case parseInt ss of
+          SOME i => Lisp.int i
+        | NONE =>
+          (case parseReal ss of
+             SOME r => Lisp.real r
+           | NONE => Lisp.sym s)
       end
 
   and parseCons ts =
@@ -577,8 +604,8 @@ struct
               pSym obj
             else if Lisp.isBool obj then
               pBool obj
-            else if Lisp.isInt obj then
-              pInt obj
+            else if Lisp.isNum obj then
+              pNum obj
             else if Lisp.isStr obj then
               pStr obj
             else if Lisp.isSubr obj then
@@ -608,8 +635,8 @@ struct
               (p " . "; pSym obj)
             else if Lisp.isBool obj then
               (p " . "; pBool obj)
-            else if Lisp.isInt obj then
-              (p " . "; pInt obj)
+            else if Lisp.isNum obj then
+              (p " . "; pNum obj)
             else if Lisp.isStr obj then
               (p " . "; pStr obj)
             else if Lisp.isSubr obj then
@@ -632,8 +659,13 @@ struct
             p (Lisp.pname obj)
         and pBool obj =
             if Lisp.toBool obj then p "#T" else p "#F"
-        and pInt obj =
-            p (Int.toString (Lisp.toInt obj))
+        and pNum obj =
+            if Lisp.isInt obj then
+              p (Int.toString (Lisp.toInt obj))
+            else if Lisp.isReal obj then
+              p (Real.toString (Lisp.toReal obj))
+            else
+              p "#<Unknown Number>"
         and pStr obj =
             (p "\"";
              p (String.toString (Lisp.toString obj));
@@ -784,7 +816,7 @@ struct
   fun isSelfEvaluating exp =
       (*Lisp.isNull exp orelse*)
       (*Lisp.isBool exp orelse*)
-      Lisp.isInt exp orelse
+      Lisp.isNum exp orelse
       Lisp.isStr exp
 
   val isVariable = Lisp.isSym
@@ -1273,7 +1305,7 @@ struct
                | Cons of obj ref * obj ref
                | Sym of string
                | Bool of bool
-               | Int of int
+               | Num of num
                | Str of string
                | Subr of int * string * (obj list -> obj)
                | Expr of int * obj * obj * obj
@@ -1281,6 +1313,9 @@ struct
                | OutputStream of int * TextIO.outstream
                | Environment of int * (obj, obj) Env.t
                | Thunk of int * thunk ref
+
+       and num = Int of int
+               | Real of real
 
        and thunk = NotEvaluated of obj * obj
                  | Evaluated of obj
@@ -1297,6 +1332,8 @@ struct
         count
       end
 
+  val i2r = Real.fromInt
+
   (* constants *)
   val undef = Undef
   val eof = Eof
@@ -1311,7 +1348,7 @@ struct
   val t_list = Sym "list"
   val t_sym = Sym "symbol"
   val t_bool = Sym "bool"
-  val t_int = Sym "int"
+  val t_num = Sym "num"
   val t_str = Sym "string"
   val t_subr = Sym "subr"
   val t_expr = Sym "expr"
@@ -1358,7 +1395,8 @@ struct
   fun cons (h, t) = Cons (ref h, ref t)
   and sym s = Sym s
   and bool b = Bool b
-  and int i = Int i
+  and int i = Num (Int i)
+  and real r = Num (Real r)
   and str s = Str s
   and subr (name, p) = Subr (inc (), name, p) (* not exported *)
   and subr0 (name, proc) =
@@ -1398,7 +1436,8 @@ struct
     | eq (Cons (h1, t1), Cons (h2, t2)) = h1 = h2 andalso t1 = t2
     | eq (Sym s1, Sym s2) = s1 = s2
     | eq (Bool b1, Bool b2) = b1 = b2
-    | eq (Int i1, Int i2) = i1 = i2
+    | eq (Num (Int i1), Num (Int i2)) = i1 = i2
+    | eq (Num (Real r1), Num (Real r2)) = Real.== (r1, r2)
     | eq (Str s1, Str s2) = s1 = s2
     | eq (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
     | eq (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
@@ -1414,7 +1453,8 @@ struct
                                              equal (!t1, !t2)
     | equal (Sym s1, Sym s2) = s1 = s2
     | equal (Bool b1, Bool b2) = b1 = b2
-    | equal (Int i1, Int i2) = i1 = i2
+    | equal (Num (Int i1), Num (Int i2)) = i1 = i2
+    | equal (Num (Real r1), Num (Real r2)) = Real.== (r1, r2)
     | equal (Str s1, Str s2) = s1 = s2
     | equal (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
     | equal (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
@@ -1443,8 +1483,8 @@ struct
     | isCons _ = false
   fun isSym (Sym _) = true
     | isSym _ = false
-  fun isInt (Int _) = true
-    | isInt _ = false
+  fun isNum (Num _) = true
+    | isNum _ = false
   fun isStr (Str _) = true
     | isStr _ = false
   fun isSubr (Subr _) = true
@@ -1494,9 +1534,117 @@ struct
   fun toBool (Bool b) = b
     | toBool obj = typeError (t_bool, obj)
 
-  (* for int *)
-  fun toInt (Int i) = i
-    | toInt obj = typeError (t_int, obj)
+  (* for num *)
+  fun isInt (Num n) =
+      (case n of
+         Int _ => true
+       | Real _ => false)
+    | isInt obj = typeError (t_num, obj)
+  fun isReal (Num n) =
+      (case n of
+         Int _ => false
+       | Real _ => true)
+    | isReal obj = typeError (t_num, obj)
+  fun toInt (Num n) =
+      (case n of
+         Int i => i
+       | Real r =>
+         raise Error ("Unexpected num type (expected: int): ~S",
+                      [real r]))
+    | toInt obj = typeError (t_num, obj)
+  fun toReal (Num n) =
+      (case n of
+         Int i => i2r i
+       | Real r => r)
+    | toReal obj = typeError (t_num, obj)
+  fun negNum (Num n) =
+      (case n of
+         Int i => int (~ i)
+       | Real r => real (~ r))
+    | negNum obj = typeError (t_num, obj)
+  fun addNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => int (i1 + i2)
+       | (Int i1, Real r2) => real ((i2r i1) + r2)
+       | (Real r1, Int i2) => real (r1 + (i2r i2))
+       | (Real r1, Real r2) => real (r1 + r2))
+    | addNum (Num _, obj) = typeError (t_num, obj)
+    | addNum (obj, _) = typeError (t_num, obj)
+  fun subNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => int (i1 - i2)
+       | (Int i1, Real r2) => real ((i2r i1) - r2)
+       | (Real r1, Int i2) => real (r1 - (i2r i2))
+       | (Real r1, Real r2) => real (r1 - r2))
+    | subNum (Num _, obj) = typeError (t_num, obj)
+    | subNum (obj, _) = typeError (t_num, obj)
+  fun mulNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => int (i1 * i2)
+       | (Int i1, Real r2) => real ((i2r i1) * r2)
+       | (Real r1, Int i2) => real (r1 * (i2r i2))
+       | (Real r1, Real r2) => real (r1 * r2))
+    | mulNum (Num _, obj) = typeError (t_num, obj)
+    | mulNum (obj, _) = typeError (t_num, obj)
+  fun quoNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => int (i1 div i2)
+       | (Int i1, Real r2) => real ((i2r i1) / r2)
+       | (Real r1, Int i2) => real (r1 / (i2r i2))
+       | (Real r1, Real r2) => real (r1 / r2))
+    | quoNum (Num _, obj) = typeError (t_num, obj)
+    | quoNum (obj, _) = typeError (t_num, obj)
+  fun remNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => int (i1 mod i2)
+       | (Int _, Real r2) =>
+         raise Error ("Unexpected num type (expected: int): ~S",
+                      [real r2])
+       | (Real r1, _) =>
+         raise Error ("Unexpected num type (expected: int): ~S",
+                      [real r1]))
+    | remNum (Num _, obj) = typeError (t_num, obj)
+    | remNum (obj, _) = typeError (t_num, obj)
+  fun eqNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => i1 = i2
+       | (Int i1, Real r2) => Real.== (i2r i1, r2)
+       | (Real r1, Int i2) => Real.== (r1, i2r i2)
+       | (Real r1, Real r2) => Real.== (r1, r2))
+    | eqNum (Num _, obj) = typeError (t_num, obj)
+    | eqNum (obj, _) = typeError (t_num, obj)
+  fun gtNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => i1 > i2
+       | (Int i1, Real r2) => (i2r i1) > r2
+       | (Real r1, Int i2) => r1 > (i2r i2)
+       | (Real r1, Real r2) => r1 > r2)
+    | gtNum (Num _, obj) = typeError (t_num, obj)
+    | gtNum (obj, _) = typeError (t_num, obj)
+  fun geNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => i1 >= i2
+       | (Int i1, Real r2) => (i2r i1) >= r2
+       | (Real r1, Int i2) => r1 >= (i2r i2)
+       | (Real r1, Real r2) => r1 >= r2)
+    | geNum (Num _, obj) = typeError (t_num, obj)
+    | geNum (obj, _) = typeError (t_num, obj)
+  fun ltNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => i1 < i2
+       | (Int i1, Real r2) => (i2r i1) < r2
+       | (Real r1, Int i2) => r1 < (i2r i2)
+       | (Real r1, Real r2) => r1 < r2)
+    | ltNum (Num _, obj) = typeError (t_num, obj)
+    | ltNum (obj, _) = typeError (t_num, obj)
+  fun leNum (Num n1, Num n2) =
+      (case (n1, n2) of
+         (Int i1, Int i2) => i1 <= i2
+       | (Int i1, Real r2) => (i2r i1) <= r2
+       | (Real r1, Int i2) => r1 <= (i2r i2)
+       | (Real r1, Real r2) => r1 <= r2)
+    | leNum (Num _, obj) = typeError (t_num, obj)
+    | leNum (obj, _) = typeError (t_num, obj)
 
   (* for string *)
   fun toString (Str s) = s
@@ -1867,6 +2015,8 @@ struct
   val stdOut = Lisp.stdOut
   val stdErr = Lisp.stdErr
   val quit = Lisp.sym ":q"
+  val zero = Lisp.int 0
+  val one = Lisp.int 1
 
   fun subr0 (name, proc) =
       (Lisp.sym name, Lisp.subr0 (name, proc))
@@ -1970,7 +2120,7 @@ struct
        subr1 ("pair?", Lisp.bool o Lisp.isCons),
        subr1 ("symbol?", Lisp.bool o Lisp.isSym),
        subr1 ("bool?", Lisp.bool o Lisp.isBool),
-       subr1 ("int?", Lisp.bool o Lisp.isInt),
+       subr1 ("number?", Lisp.bool o Lisp.isNum),
        subr1 ("string?", Lisp.bool o Lisp.isStr),
        subr1 ("subr?", Lisp.bool o Lisp.isSubr),
        subr1 ("expr?", Lisp.bool o Lisp.isExpr),
@@ -1979,98 +2129,48 @@ struct
        subr0R ("+",
                (fn ns =>
                    let
-                     fun f (a, b) = b + (Lisp.toInt a)
+                     fun f (a, b) = Lisp.addNum (b, a)
                    in
                      (*
                       * foldl f i [i0,i1,...,iN]; where f(a,b) = b+a
                       * = f(iN,...,f(i1,f(i0,i)))
                       * = (((i+i0)+i1)+...+iN)
                       *)
-                     Lisp.int (List.foldl f 0 ns)
+                     List.foldl f zero ns
                    end)),
        subr0R ("-",
-               (fn nil => Lisp.int 0
-                 | (n::nil) => Lisp.int (~ (Lisp.toInt n))
+               (fn nil => zero
+                 | (n::nil) => Lisp.negNum n
                  | (n::ns) =>
                    let
-                     fun f (a, b) = b - (Lisp.toInt a)
-                     val i = Lisp.toInt n
+                     fun f (a, b) = Lisp.subNum (b, a)
                    in
                      (*
                       * foldl f i [i0,i1,...,iN]; where f(a,b) = b-a
                       * = f(iN,...,f(i1,f(i0,i)))
                       * = (((i-i0)-i1)-...-iN)
                       *)
-                     Lisp.int (List.foldl f i ns)
+                     List.foldl f n ns
                    end)),
        subr0R ("*",
                (fn ns =>
                    let
-                     fun f (a, b) = b * (Lisp.toInt a)
+                     fun f (a, b) = Lisp.mulNum (b, a)
                    in
                      (*
                       * foldl f i [i0,i1,...,iN]; where f(a,b) = b*a
                       * = f(iN,...,f(i1,f(i0,i)))
                       * = (((i*i0)*i1)*...*iN)
                       *)
-                     Lisp.int (List.foldl f 1 ns)
+                     List.foldl f one ns
                    end)),
-       subr2 ("/",
-              (fn (n1,n2) =>
-                  let
-                    val i1 = Lisp.toInt n1
-                    val i2 = Lisp.toInt n2
-                  in
-                    Lisp.int (i1 div i2)
-                  end)),
-       subr2 ("%",
-              (fn (n1,n2) =>
-                  let
-                    val i1 = Lisp.toInt n1
-                    val i2 = Lisp.toInt n2
-                  in
-                    Lisp.int (i1 mod i2)
-                  end)),
-       subr2 ("=",
-              (fn (n1,n2) =>
-                  let
-                    val i1 = Lisp.toInt n1
-                    val i2 = Lisp.toInt n2
-                  in
-                    Lisp.bool (i1 = i2)
-                  end)),
-       subr2 (">=",
-              (fn (n1,n2) =>
-                  let
-                    val i1 = Lisp.toInt n1
-                    val i2 = Lisp.toInt n2
-                  in
-                    Lisp.bool (i1 >= i2)
-                  end)),
-       subr2 (">",
-              (fn (n1,n2) =>
-                  let
-                    val i1 = Lisp.toInt n1
-                    val i2 = Lisp.toInt n2
-                  in
-                    Lisp.bool (i1 > i2)
-                  end)),
-       subr2 ("<=",
-              (fn (n1,n2) =>
-                  let
-                    val i1 = Lisp.toInt n1
-                    val i2 = Lisp.toInt n2
-                  in
-                    Lisp.bool (i1 <= i2)
-                  end)),
-       subr2 ("<",
-              (fn (n1,n2) =>
-                  let
-                    val i1 = Lisp.toInt n1
-                    val i2 = Lisp.toInt n2
-                  in
-                    Lisp.bool (i1 < i2)
-                  end)),
+       subr2 ("/", Lisp.quoNum),
+       subr2 ("%", Lisp.remNum),
+       subr2 ("=", Lisp.bool o Lisp.eqNum),
+       subr2 (">", Lisp.bool o Lisp.gtNum),
+       subr2 ("<", Lisp.bool o Lisp.ltNum),
+       subr2 (">=", Lisp.bool o Lisp.geNum),
+       subr2 ("<=", Lisp.bool o Lisp.leNum),
        subr0 ("read", fn () => Reader.read stdIn),
        subr1 ("print",
               (fn obj =>
