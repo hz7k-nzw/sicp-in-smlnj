@@ -49,6 +49,7 @@ Currently, the following sections are translated:
  4.1  The Metacircular Evaluator
  => chap4_1.sml
  4.2  Variations on a Scheme -- Lazy Evaluation
+ => chap4_2.sml
  4.3  Variations on a Scheme -- Nondeterministic Computing
  4.4  Logic Programming
  => not translated yet
@@ -73,5 +74,5 @@ Currently, the following sections are translated:
 [4] Topics:SICP in other languages - CTMWiki
     http://www.codepoetics.com/wiki/index.php?title=Topics:SICP_in_other_languages
 
-[5] Eli Bendersky’s website >> SICP
+[5] Eli Bendersky's website >> SICP
     http://eli.thegreenplace.net/category/programming/lisp/sicp/
