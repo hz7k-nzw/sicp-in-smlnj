@@ -38,9 +38,11 @@ sig
   val subr0 : string * (unit -> obj) -> obj
   val subr1 : string * (obj -> obj) -> obj
   val subr2 : string * (obj * obj -> obj) -> obj
+  val subr3 : string * (obj * obj * obj -> obj) -> obj
   val subr0R : string * (obj list -> obj) -> obj
   val subr1R : string * (obj * obj list -> obj) -> obj
   val subr2R : string * (obj * obj * obj list -> obj) -> obj
+  val subr3R : string * (obj * obj * obj * obj list -> obj) -> obj
   val expr : obj * obj * obj -> obj
   val inputStream : TextIO.instream -> obj
   val outputSream : TextIO.outstream -> obj
@@ -151,6 +153,7 @@ sig
   type obj
 
   (* predefined symbols *)
+  val AMB : obj
   val BEGIN : obj
   val DEFINE : obj
   val FALSE : obj
@@ -210,6 +213,10 @@ sig
   (* for derived-expressions *)
   val isDerived : obj -> bool
   val expandDerived : obj -> obj
+
+  (* for amb evaluator: used in chap4_3.sml *)
+  val isAmb : obj -> bool
+  val ambChoices : obj -> obj
 end;
 
 signature LISP_EVALUATOR =
@@ -793,6 +800,7 @@ functor LispSyntaxFn (structure Lisp: LISP) : LISP_SYNTAX =
 struct
   type obj = Lisp.obj
 
+  val AMB = Lisp.sym "amb"
   val BEGIN = Lisp.sym "begin"
   val DEFINE = Lisp.sym "define"
   val FALSE = Lisp.sym "false"
@@ -1293,6 +1301,10 @@ struct
       else if isLet2 exp then expandLet2 exp
       else if isLetrec exp then expandLetrec exp
       else raise Lisp.Error ("Unsupported derived expression: ~S", [exp])
+
+  (* for amb evaluator: used in chap4_3.sml *)
+  fun isAmb exp = isTaggedList AMB exp
+  fun ambChoices exp = Lisp.cdr exp
 end;
 
 (* 4.1.3  Evaluator Data Structures *)
@@ -1307,7 +1319,7 @@ struct
                | Bool of bool
                | Num of num
                | Str of string
-               | Subr of int * string * (obj list -> obj)
+               | Subr of int * string * proc
                | Expr of int * obj * obj * obj
                | InputStream of int * TextIO.instream
                | OutputStream of int * TextIO.outstream
@@ -1316,6 +1328,15 @@ struct
 
        and num = Int of int
                | Real of real
+
+       and proc = Proc0 of unit -> obj
+                | Proc1 of obj -> obj
+                | Proc2 of obj * obj -> obj
+                | Proc3 of obj * obj * obj -> obj
+                | Proc0R of obj list -> obj
+                | Proc1R of obj * obj list -> obj
+                | Proc2R of obj * obj * obj list -> obj
+                | Proc3R of obj * obj * obj * obj list -> obj
 
        and thunk = NotEvaluated of obj * obj
                  | Evaluated of obj
@@ -1398,24 +1419,14 @@ struct
   and int i = Num (Int i)
   and real r = Num (Real r)
   and str s = Str s
-  and subr (name, p) = Subr (inc (), name, p) (* not exported *)
-  and subr0 (name, proc) =
-      subr (name, fn [] => proc ()
-                   | args => argsError (name, args, 0))
-  and subr1 (name, proc) =
-      subr (name, fn [x1] => proc x1
-                   | args => argsError (name, args, 1))
-  and subr2 (name, proc) =
-      subr (name, fn [x1,x2] => proc (x1,x2)
-                   | args => argsError (name, args, 2))
-  and subr0R (name, proc) =
-      subr (name, fn xs => proc xs)
-  and subr1R (name, proc) =
-      subr (name, fn (x1::xs) => proc (x1,xs)
-                   | args => argsError (name, args, 1))
-  and subr2R (name, proc) =
-      subr (name, fn (x1::x2::xs) => proc (x1,x2,xs)
-                   | args => argsError (name, args, 2))
+  and subr0 (name, proc) = Subr (inc (), name, Proc0 proc)
+  and subr1 (name, proc) = Subr (inc (), name, Proc1 proc)
+  and subr2 (name, proc) = Subr (inc (), name, Proc2 proc)
+  and subr3 (name, proc) = Subr (inc (), name, Proc3 proc)
+  and subr0R (name, proc) = Subr (inc (), name, Proc0R proc)
+  and subr1R (name, proc) = Subr (inc (), name, Proc1R proc)
+  and subr2R (name, proc) = Subr (inc (), name, Proc2R proc)
+  and subr3R (name, proc) = Subr (inc (), name, Proc3R proc)
   and expr (params, body, env) = Expr (inc (), params, body, env)
   and inputStream is = InputStream (inc (), is)
   and outputSream os = OutputStream (inc (), os)
@@ -1439,8 +1450,8 @@ struct
     | eq (Num (Int i1), Num (Int i2)) = i1 = i2
     | eq (Num (Real r1), Num (Real r2)) = Real.== (r1, r2)
     | eq (Str s1, Str s2) = s1 = s2
-    | eq (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
     | eq (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
+    | eq (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
     | eq (InputStream (id1,_), InputStream (id2,_)) = id1 = id2
     | eq (OutputStream (id1,_), OutputStream (id2,_)) = id1 = id2
     | eq (Environment (id1,_), Environment (id2,_)) = id1 = id2
@@ -1456,8 +1467,8 @@ struct
     | equal (Num (Int i1), Num (Int i2)) = i1 = i2
     | equal (Num (Real r1), Num (Real r2)) = Real.== (r1, r2)
     | equal (Str s1, Str s2) = s1 = s2
-    | equal (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
     | equal (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
+    | equal (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
     | equal (InputStream (id1,_), InputStream (id2,_)) = id1 = id2
     | equal (OutputStream (id1,_), OutputStream (id2,_)) = id1 = id2
     | equal (Environment (id1,_), Environment (id2,_)) = id1 = id2
@@ -1653,7 +1664,30 @@ struct
   (* for subr (primitive procedure) *)
   fun subrName (Subr (_,name,_)) = name
     | subrName obj = typeError (t_subr, obj)
-  fun applySubr (Subr (_,_,p)) vs = p vs
+  fun applySubr (Subr (_,name,proc)) vs =
+      (case proc of
+         Proc0 p => (case vs of
+                       [] => p ()
+                     | args => argsError (name, args, 0))
+       | Proc1 p => (case vs of
+                       [x1] => p x1
+                     | args => argsError (name, args, 1))
+       | Proc2 p => (case vs of
+                       [x1,x2] => p (x1,x2)
+                     | args => argsError (name, args, 2))
+       | Proc3 p => (case vs of
+                       [x1,x2,x3] => p (x1,x2,x3)
+                     | args => argsError (name, args, 3))
+       | Proc0R p => p vs
+       | Proc1R p => (case vs of
+                        (x1::xs) => p (x1,xs)
+                      | args => argsError (name, args, 1))
+       | Proc2R p => (case vs of
+                        (x1::x2::xs) => p (x1,x2,xs)
+                      | args => argsError (name, args, 2))
+       | Proc3R p => (case vs of
+                        (x1::x2::x3::xs) => p (x1,x2,x3,xs)
+                      | args => argsError (name, args, 3)))
     | applySubr obj _ = typeError (t_subr, obj)
 
   (* for expr (compound procedure) *)
@@ -2523,11 +2557,10 @@ struct
   and analyzeLambda exp =
       let
         val vars = Syntax.lambdaParameters exp
-        val bproc = analyzeSequence (Syntax.lambdaBody exp)
+        val proc = analyzeSequence (Syntax.lambdaBody exp)
+        val body = toBody proc
       in
-        (fn env => Lisp.expr (vars,
-                              Lisp.subr1 ("bproc", bproc),
-                              env))
+        (fn env => Lisp.expr (vars, body, env))
       end
 
   and analyzeSequence exps =
@@ -2572,6 +2605,8 @@ struct
         raise Lisp.Error ("Not a procedure -- executeApplication: ~S",
                           [proc])
 
+  and toBody p = Lisp.subr1 ("body", p)
+
   and toProcs exps =
       if Lisp.isNull exps then
         nil
@@ -2580,8 +2615,10 @@ struct
       else
         raise Lisp.Error ("Improper sequence: ~S", [exps])
 
+  (* declared in LISP_EVALUATOR signature *)
   val eval = analyze
 
+  (* declared in LISP_EVALUATOR signature *)
   val apply = executeApplication
 end;
 
