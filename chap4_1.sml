@@ -24,6 +24,8 @@ sig
   val null : obj
   val t : obj
   val f : obj
+  val zero : obj
+  val one : obj
   val stdIn : obj
   val stdOut : obj
   val stdErr : obj
@@ -1355,6 +1357,8 @@ struct
   val null = Nil
   val t = Bool true
   val f = Bool false
+  val zero = Num (Int 0)
+  val one = Num (Int 1)
   val stdIn = InputStream (inc (), TextIO.stdIn)
   val stdOut = OutputStream (inc (), TextIO.stdOut)
   val stdErr = OutputStream (inc (), TextIO.stdErr)
@@ -1376,6 +1380,7 @@ struct
   fun typeError (expected, obj) =
       raise Error ("Unexpected data specified: ~S (expected type: ~S)",
                    [obj, expected])
+
   fun emptyError () =
       raise Error ("Empty list specified", nil)
 
@@ -1395,6 +1400,10 @@ struct
         raise Error (msg, nil)
       end
 
+  fun numTypeError r =
+      raise Error ("Unexpected num type (expected: int): ~S",
+                   [Num (Real r)])
+
   fun thunkError (expectedState, thunk) =
       let
         val msg = if expectedState then
@@ -1409,8 +1418,11 @@ struct
   (* constructors *)
   fun cons (h, t) = Cons (ref h, ref t)
   and sym s = Sym s
-  and bool b = Bool b
-  and int i = Num (Int i)
+  and bool true = t
+    | bool false = f
+  and int 0 = zero
+    | int 1 = one
+    | int i = Num (Int i)
   and real r = Num (Real r)
   and str s = Str s
   and subr0 (name, proc) = Subr (inc (), name, Proc0 proc)
@@ -1561,9 +1573,7 @@ struct
   fun toInt (Num n) =
       (case n of
          Int i => i
-       | Real r =>
-         raise Error ("Unexpected num type (expected: int): ~S",
-                      [real r]))
+       | Real r => numTypeError r)
     | toInt obj = typeError (t_num, obj)
   fun toReal (Num n) =
       (case n of
@@ -1610,12 +1620,8 @@ struct
   fun remNum (Num n1, Num n2) =
       (case (n1, n2) of
          (Int i1, Int i2) => int (i1 mod i2)
-       | (Int _, Real r2) =>
-         raise Error ("Unexpected num type (expected: int): ~S",
-                      [real r2])
-       | (Real r1, _) =>
-         raise Error ("Unexpected num type (expected: int): ~S",
-                      [real r1]))
+       | (Int _, Real r2) => numTypeError r2
+       | (Real r1, _) => numTypeError r1)
     | remNum (Num _, obj) = typeError (t_num, obj)
     | remNum (obj, _) = typeError (t_num, obj)
   fun eqNum (Num n1, Num n2) =
@@ -2051,8 +2057,6 @@ struct
   val stdOut = Lisp.stdOut
   val stdErr = Lisp.stdErr
   val quit = Lisp.sym ":q"
-  val zero = Lisp.int 0
-  val one = Lisp.int 1
 
   fun subr0 (name, proc) =
       (Lisp.sym name, Lisp.subr0 (name, proc))
@@ -2172,10 +2176,10 @@ struct
                       * = f(iN,...,f(i1,f(i0,i)))
                       * = (((i+i0)+i1)+...+iN)
                       *)
-                     List.foldl f zero ns
+                     List.foldl f Lisp.zero ns
                    end)),
        subr0R ("-",
-               (fn nil => zero
+               (fn nil => Lisp.zero
                  | (n::nil) => Lisp.negNum n
                  | (n::ns) =>
                    let
@@ -2198,7 +2202,7 @@ struct
                       * = f(iN,...,f(i1,f(i0,i)))
                       * = (((i*i0)*i1)*...*iN)
                       *)
-                     List.foldl f one ns
+                     List.foldl f Lisp.one ns
                    end)),
        subr2 ("/", Lisp.quoNum),
        subr2 ("%", Lisp.remNum),
