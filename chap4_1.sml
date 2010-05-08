@@ -93,12 +93,15 @@ sig
   val cdddr : obj -> obj
   val setCar : obj -> obj -> obj
   val setCdr : obj -> obj -> obj
+  val map : (obj -> obj) -> obj -> obj
+  val append : (obj * obj) -> obj
 
   (* for symbol *)
   val pname : obj -> string
 
   (* for bool *)
   val toBool : obj -> bool
+  val not : obj -> obj
 
   (* for num *)
   val isInt : obj -> bool
@@ -144,7 +147,7 @@ sig
   val thunkExp : obj -> obj
   val thunkEnv : obj -> obj
   val thunkValue : obj -> obj
-  val setThunkValue : obj -> obj -> unit
+  val setThunkValue : obj -> obj -> obj
   val isEvaluated : obj -> bool
 end;
 
@@ -235,11 +238,11 @@ end;
 signature LISP_PRINTER =
 sig
   type obj
-  val print : obj * obj -> unit
-  val printString : obj * string -> unit
-  val terpri : obj -> unit
-  val flush : obj -> unit
-  val format : obj * string * obj list -> unit
+  val print : obj * obj -> obj
+  val printString : obj * string -> obj
+  val terpri : obj -> obj
+  val flush : obj -> obj
+  val format : obj * string * obj list -> obj
 end;
 
 signature ENV =
@@ -592,7 +595,8 @@ struct
         val ostream = Lisp.toOutstream os
       in
         doPrint (ostream, obj);
-        TextIO.flushOut ostream
+        TextIO.flushOut ostream;
+        Lisp.undef
       end
 
   and doPrint (ostream, obj) =
@@ -721,7 +725,8 @@ struct
         val ostream = Lisp.toOutstream os
       in
         TextIO.output (ostream, s);
-        TextIO.flushOut ostream
+        TextIO.flushOut ostream;
+        Lisp.undef
       end
 
   fun terpri os =
@@ -729,14 +734,16 @@ struct
         val ostream = Lisp.toOutstream os
       in
         TextIO.output (ostream, "\n");
-        TextIO.flushOut ostream
+        TextIO.flushOut ostream;
+        Lisp.undef
       end
 
   fun flush os =
       let
         val ostream = Lisp.toOutstream os
       in
-        TextIO.flushOut ostream
+        TextIO.flushOut ostream;
+        Lisp.undef
       end
 
   fun format (os, ctrlstr, args) =
@@ -790,7 +797,8 @@ struct
           | traverse (Newline::fs, args) =
             (terpri os; traverse (fs, args))
       in
-        traverse (parse ss, args)
+        traverse (parse ss, args);
+        Lisp.undef
       end
 end;
 
@@ -962,20 +970,6 @@ struct
       else if (Lisp.isNull o Lisp.cdr) seq then
         Lisp.car seq
       else makeBegin seq
-
-  fun map' f seq =
-      if Lisp.isNull seq then Lisp.null
-      else
-        let
-          val h = f (Lisp.car seq)
-          val t = map' f (Lisp.cdr seq)
-        in
-          Lisp.cons (h, t)
-        end
-
-  fun append' (x, y) =
-      if Lisp.isNull x then y
-      else Lisp.cons (Lisp.car x, append' (Lisp.cdr x, y))
 
   val isCond = isTaggedList COND
   val expandCond =
@@ -1179,8 +1173,8 @@ struct
               val params = Lisp.car clauses
               val body = Lisp.cdr clauses
 
-              val operator = makeLambda (map' Lisp.car params, body)
-              val operands = map' Lisp.cadr params
+              val operator = makeLambda (Lisp.map Lisp.car params, body)
+              val operands = Lisp.map Lisp.cadr params
             in
               makeApplication (operator, operands)
             end
@@ -1199,8 +1193,8 @@ struct
 
               val letParam = Lisp.fromList [name, makeTrue ()]
               val letParams = Lisp.fromList [letParam]
-              val operator = makeLambda (map' Lisp.car params, body)
-              val operands = map' Lisp.cadr params
+              val operator = makeLambda (Lisp.map Lisp.car params, body)
+              val operands = Lisp.map Lisp.cadr params
               val assignForm = makeAssign (name, operator)
               val appForm = makeApplication (name, operands)
             in
@@ -1276,8 +1270,8 @@ struct
                   in
                     makeAssign (var, value)
                   end
-              val letParams = map' toInit params
-              val letBody = append' (map' toAssign params, body)
+              val letParams = Lisp.map toInit params
+              val letBody = Lisp.append (Lisp.map toAssign params, body)
             in
               Lisp.cons (LET, Lisp.cons (letParams, letBody))
             end
@@ -1536,6 +1530,12 @@ struct
   fun setCdr (Cons (_,t)) newObj = (t := newObj; undef)
     | setCdr Nil _ = emptyError ()
     | setCdr obj _ = typeError (t_list, obj)
+  fun map f seq =
+      if isNull seq then null
+      else cons (f (car seq), map f (cdr seq))
+  fun append (x, y) =
+      if isNull x then y
+      else cons (car x, append (cdr x, y))
 
   (* for symbol *)
   fun pname (Sym s) = s
@@ -1544,6 +1544,8 @@ struct
   (* for bool *)
   fun toBool (Bool b) = b
     | toBool obj = typeError (t_bool, obj)
+  fun not obj =
+      if isTrue obj then f else t
 
   (* for num *)
   fun isInt (Num n) =
@@ -1765,7 +1767,7 @@ struct
     | thunkValue obj = typeError (t_thunk, obj)
   fun setThunkValue (obj as Thunk (_,tref)) value =
       (case !tref of
-         NotEvaluated _ => tref := (Evaluated value)
+         NotEvaluated _ => (tref := (Evaluated value); undef)
        | Evaluated _ => thunkError (false, obj))
     | setThunkValue obj _ = typeError (t_thunk, obj)
   fun isEvaluated (Thunk (_,tref)) =
@@ -2205,21 +2207,20 @@ struct
        subr2 ("<", Lisp.bool o Lisp.ltNum),
        subr2 (">=", Lisp.bool o Lisp.geNum),
        subr2 ("<=", Lisp.bool o Lisp.leNum),
+       subr1 ("not", Lisp.not),
        subr0 ("read", fn () => Reader.read stdIn),
        subr1 ("print",
-              (fn obj =>
-                  (Printer.print (stdOut, obj); obj))),
+              (fn obj => Printer.print (stdOut, obj))),
        subr1 ("print-string",
               (fn obj =>
-                  (Printer.printString (stdOut, Lisp.toString obj); obj))),
+                  Printer.printString (stdOut, Lisp.toString obj))),
        subr0 ("terpri",
-              (fn () => (Printer.terpri stdOut; Lisp.t))),
+              (fn () => Printer.terpri stdOut)),
        subr0 ("flush",
-              (fn () => (Printer.flush stdOut; Lisp.t))),
+              (fn () => Printer.flush stdOut)),
        subr1R ("format",
                (fn (fmt,args) =>
-                   (Printer.format (stdOut, Lisp.toString fmt, args);
-                    Lisp.t))),
+                   Printer.format (stdOut, Lisp.toString fmt, args))),
        subr2 ("eval",
               (fn (exp, env) =>
                   Evaluator.eval exp env)),
@@ -2255,10 +2256,12 @@ struct
       end
 
   fun hello () =
-      Printer.format (stdOut, "Hello!~%Press ':q' to exit", nil);
+      ignore (Printer.format (stdOut, "Hello!~%"^
+                                      "Type '~S' to exit~%",
+                              [quit]))
 
   fun bye () =
-      Printer.format (stdOut, "Bye!~%", nil)
+      ignore (Printer.format (stdOut, "Bye!~%", nil))
 
   fun onError (Lisp.Error (ctrlstr,args), cont) =
       let
@@ -2320,9 +2323,10 @@ struct
               val ret' = Evaluator.eval obj' env
             in
               if Lisp.equal (ret, ret') then
-                Printer.format (stdOut,
-                                "[~S] OK: ~S -> ~S~%",
-                                [n, obj, ret])
+                (Printer.format (stdOut,
+                                 "[~S] OK: ~S -> ~S~%",
+                                 [n, obj, ret]);
+                 ())
               else
                 (Printer.format (stdOut,
                                  "[~S] NG: ~S -> ~S; (expected: ~S)~%",
