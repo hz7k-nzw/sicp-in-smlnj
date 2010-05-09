@@ -2057,205 +2057,190 @@ struct
   val stdOut = Lisp.stdOut
   val stdErr = Lisp.stdErr
   val quit = Lisp.sym ":q"
-
-  fun subr0 (name, proc) =
-      (Lisp.sym name, Lisp.subr0 (name, proc))
-  fun subr1 (name, proc) =
-      (Lisp.sym name, Lisp.subr1 (name, proc))
-  fun subr2 (name, proc) =
-      (Lisp.sym name, Lisp.subr2 (name, proc))
-  fun subr0R (name, proc) =
-      (Lisp.sym name, Lisp.subr0R (name, proc))
-  fun subr1R (name, proc) =
-      (Lisp.sym name, Lisp.subr1R (name, proc))
-  fun subr2R (name, proc) =
-      (Lisp.sym name, Lisp.subr2R (name, proc))
-  val primitiveProcedures =
-      [subr2 ("cons", Lisp.cons),
-       subr1 ("car", Lisp.car),
-       subr1 ("cdr", Lisp.cdr),
-       subr1 ("caar", Lisp.caar),
-       subr1 ("cadr", Lisp.cadr),
-       subr1 ("cdar", Lisp.cdar),
-       subr1 ("cddr", Lisp.cddr),
-       subr1 ("caaar", Lisp.caaar),
-       subr1 ("caadr", Lisp.caadr),
-       subr1 ("cadar", Lisp.cadar),
-       subr1 ("cdaar", Lisp.cdaar),
-       subr1 ("caddr", Lisp.caddr),
-       subr1 ("cdadr", Lisp.cdadr),
-       subr1 ("cddar", Lisp.cddar),
-       subr1 ("cdddr", Lisp.cdddr),
-       subr2 ("set-car!", fn (lst,obj) => Lisp.setCar lst obj),
-       subr2 ("set-cdr!", fn (lst,obj) => Lisp.setCdr lst obj),
-       subr0R ("list", Lisp.fromList),
-       subr1 ("length",
-              (fn lst =>
-                  let
-                    fun len l =
-                        if Lisp.isNull l then 0
-                        else 1 + (len (Lisp.cdr l))
-                  in
-                    Lisp.int (len lst)
-                  end)),
-       subr2 ("nth",
-              (fn (lst,n) =>
-                  let
-                    fun error () =
-                        raise Lisp.Error ("Subscript out of bounds", nil)
-                    fun iter (l, i) =
-                        if Lisp.isNull l then
-                          error ()
-                        else
-                          if i = 0 then
-                            Lisp.car l
-                          else
-                            iter (Lisp.cdr l, i - 1)
-                    val i = Lisp.toInt n
-                  in
-                    if i < 0 then error ()
-                    else iter (lst, i)
-                  end)),
-       subr2 ("assoc",
-              (fn (key,lst) =>
-                  let
-                    fun iter (k,l) =
-                        if Lisp.isNull l then
-                          Lisp.f
-                        else
-                          let
-                            val p = Lisp.car l
-                            val k' = Lisp.car p
-                          in
-                            if Lisp.equal (k,k') then p
-                            else iter (k, Lisp.cdr l)
-                          end
-                  in
-                    iter (key, lst)
-                  end)),
-       subr2R ("map",
-               (fn (p,lst,lsts) =>
-                   let
-                     fun isEnd nil = false
-                       | isEnd (l::ll) =
-                         if Lisp.isNull l then true
-                         else isEnd ll
-                     fun first nil = nil
-                       | first (l::ll) = (Lisp.car l)::(first ll)
-                     fun rest nil = nil
-                       | rest (l::ll) = (Lisp.cdr l)::(rest ll)
-                     fun map ll =
-                         if isEnd ll then Lisp.null
-                         else
-                           Lisp.cons (Evaluator.apply p (first ll),
-                                      map (rest ll))
-                   in
-                     map (lst::lsts)
-                   end)),
-       subr2 ("eq?", Lisp.bool o Lisp.eq),
-       subr2 ("equal?", Lisp.bool o Lisp.equal),
-       subr1 ("null?", Lisp.bool o Lisp.isNull),
-       subr1 ("true?", Lisp.bool o Lisp.isTrue),
-       subr1 ("false?", Lisp.bool o Lisp.isFalse),
-       subr1 ("pair?", Lisp.bool o Lisp.isCons),
-       subr1 ("symbol?", Lisp.bool o Lisp.isSym),
-       subr1 ("bool?", Lisp.bool o Lisp.isBool),
-       subr1 ("number?", Lisp.bool o Lisp.isNum),
-       subr1 ("string?", Lisp.bool o Lisp.isStr),
-       subr1 ("subr?", Lisp.bool o Lisp.isSubr),
-       subr1 ("expr?", Lisp.bool o Lisp.isExpr),
-       subr1 ("input-stream?", Lisp.bool o Lisp.isInputStream),
-       subr1 ("output-stream?", Lisp.bool o Lisp.isOutputStream),
-       subr0R ("+",
-               (fn ns =>
-                   let
-                     fun f (a, b) = Lisp.addNum (b, a)
-                   in
-                     (*
-                      * foldl f i [i0,i1,...,iN]; where f(a,b) = b+a
-                      * = f(iN,...,f(i1,f(i0,i)))
-                      * = (((i+i0)+i1)+...+iN)
-                      *)
-                     List.foldl f Lisp.zero ns
-                   end)),
-       subr0R ("-",
-               (fn nil => Lisp.zero
-                 | (n::nil) => Lisp.negNum n
-                 | (n::ns) =>
-                   let
-                     fun f (a, b) = Lisp.subNum (b, a)
-                   in
-                     (*
-                      * foldl f i [i0,i1,...,iN]; where f(a,b) = b-a
-                      * = f(iN,...,f(i1,f(i0,i)))
-                      * = (((i-i0)-i1)-...-iN)
-                      *)
-                     List.foldl f n ns
-                   end)),
-       subr0R ("*",
-               (fn ns =>
-                   let
-                     fun f (a, b) = Lisp.mulNum (b, a)
-                   in
-                     (*
-                      * foldl f i [i0,i1,...,iN]; where f(a,b) = b*a
-                      * = f(iN,...,f(i1,f(i0,i)))
-                      * = (((i*i0)*i1)*...*iN)
-                      *)
-                     List.foldl f Lisp.one ns
-                   end)),
-       subr2 ("/", Lisp.quoNum),
-       subr2 ("%", Lisp.remNum),
-       subr2 ("=", Lisp.bool o Lisp.eqNum),
-       subr2 (">", Lisp.bool o Lisp.gtNum),
-       subr2 ("<", Lisp.bool o Lisp.ltNum),
-       subr2 (">=", Lisp.bool o Lisp.geNum),
-       subr2 ("<=", Lisp.bool o Lisp.leNum),
-       subr1 ("not", Lisp.not),
-       subr0 ("read", fn () => Reader.read stdIn),
-       subr1 ("print",
-              (fn obj => Printer.print (stdOut, obj))),
-       subr1 ("print-string",
-              (fn obj =>
-                  Printer.printString (stdOut, Lisp.toString obj))),
-       subr0 ("terpri",
-              (fn () => Printer.terpri stdOut)),
-       subr0 ("flush",
-              (fn () => Printer.flush stdOut)),
-       subr1R ("format",
-               (fn (fmt,args) =>
-                   Printer.format (stdOut, Lisp.toString fmt, args))),
-       subr2 ("eval",
-              (fn (exp, env) =>
-                  Evaluator.eval exp env)),
-       subr2 ("apply",
-              (fn (proc, args) =>
-                  Evaluator.apply proc (Lisp.toList args))),
-       subr1 ("expand-syntax",
-              (fn exp =>
-                  if Syntax.isDerived exp then
-                    Syntax.expandDerived exp
-                  else
-                    exp)),
-       subr1R ("error",
-               (fn (fmt,args) =>
-                   raise Lisp.Error (Lisp.toString fmt, args)))]
+  val subrs =
+      [Lisp.subr2 ("cons", Lisp.cons),
+       Lisp.subr1 ("car", Lisp.car),
+       Lisp.subr1 ("cdr", Lisp.cdr),
+       Lisp.subr1 ("caar", Lisp.caar),
+       Lisp.subr1 ("cadr", Lisp.cadr),
+       Lisp.subr1 ("cdar", Lisp.cdar),
+       Lisp.subr1 ("cddr", Lisp.cddr),
+       Lisp.subr1 ("caaar", Lisp.caaar),
+       Lisp.subr1 ("caadr", Lisp.caadr),
+       Lisp.subr1 ("cadar", Lisp.cadar),
+       Lisp.subr1 ("cdaar", Lisp.cdaar),
+       Lisp.subr1 ("caddr", Lisp.caddr),
+       Lisp.subr1 ("cdadr", Lisp.cdadr),
+       Lisp.subr1 ("cddar", Lisp.cddar),
+       Lisp.subr1 ("cdddr", Lisp.cdddr),
+       Lisp.subr2 ("set-car!",
+                   (fn (lst,obj) => Lisp.setCar lst obj)),
+       Lisp.subr2 ("set-cdr!",
+                   (fn (lst,obj) => Lisp.setCdr lst obj)),
+       Lisp.subr0R ("list", Lisp.fromList),
+       Lisp.subr1 ("length",
+                   (fn lst =>
+                       let
+                         fun len l =
+                             if Lisp.isNull l then 0
+                             else 1 + (len (Lisp.cdr l))
+                       in
+                         Lisp.int (len lst)
+                       end)),
+       Lisp.subr2 ("nth",
+                   (fn (lst,n) =>
+                       let
+                         fun error () =
+                             raise Lisp.Error
+                                       ("Subscript out of bounds", nil)
+                         fun iter (l, i) =
+                             if Lisp.isNull l then
+                               error ()
+                             else
+                               if i = 0 then
+                                 Lisp.car l
+                               else
+                                 iter (Lisp.cdr l, i - 1)
+                         val i = Lisp.toInt n
+                       in
+                         if i < 0 then error ()
+                         else iter (lst, i)
+                       end)),
+       Lisp.subr2 ("assoc",
+                   (fn (key,lst) =>
+                       let
+                         fun iter (k,l) =
+                             if Lisp.isNull l then
+                               Lisp.f
+                             else
+                               let
+                                 val p = Lisp.car l
+                                 val k' = Lisp.car p
+                               in
+                                 if Lisp.equal (k,k') then p
+                                 else iter (k, Lisp.cdr l)
+                               end
+                       in
+                         iter (key, lst)
+                       end)),
+       Lisp.subr2R ("map",
+                    (fn (p,lst,lsts) =>
+                        let
+                          fun isEnd nil = false
+                            | isEnd (l::ll) =
+                              if Lisp.isNull l then true
+                              else isEnd ll
+                          fun first nil = nil
+                            | first (l::ll) = (Lisp.car l)::(first ll)
+                          fun rest nil = nil
+                            | rest (l::ll) = (Lisp.cdr l)::(rest ll)
+                          fun map ll =
+                              if isEnd ll then Lisp.null
+                              else
+                                Lisp.cons (Evaluator.apply p (first ll),
+                                           map (rest ll))
+                        in
+                          map (lst::lsts)
+                        end)),
+       Lisp.subr2 ("eq?", Lisp.bool o Lisp.eq),
+       Lisp.subr2 ("equal?", Lisp.bool o Lisp.equal),
+       Lisp.subr1 ("null?", Lisp.bool o Lisp.isNull),
+       Lisp.subr1 ("true?", Lisp.bool o Lisp.isTrue),
+       Lisp.subr1 ("false?", Lisp.bool o Lisp.isFalse),
+       Lisp.subr1 ("pair?", Lisp.bool o Lisp.isCons),
+       Lisp.subr1 ("symbol?", Lisp.bool o Lisp.isSym),
+       Lisp.subr1 ("bool?", Lisp.bool o Lisp.isBool),
+       Lisp.subr1 ("number?", Lisp.bool o Lisp.isNum),
+       Lisp.subr1 ("string?", Lisp.bool o Lisp.isStr),
+       Lisp.subr1 ("subr?", Lisp.bool o Lisp.isSubr),
+       Lisp.subr1 ("expr?", Lisp.bool o Lisp.isExpr),
+       Lisp.subr1 ("input-stream?", Lisp.bool o Lisp.isInputStream),
+       Lisp.subr1 ("output-stream?", Lisp.bool o Lisp.isOutputStream),
+       Lisp.subr0R ("+",
+                    (fn ns =>
+                        let
+                          fun f (a, b) = Lisp.addNum (b, a)
+                        in
+                          (*
+                           * foldl f i [i0,i1,...,iN]; where f(a,b) = b+a
+                           * = f(iN,...,f(i1,f(i0,i)))
+                           * = (((i+i0)+i1)+...+iN)
+                           *)
+                          List.foldl f Lisp.zero ns
+                        end)),
+       Lisp.subr0R ("-",
+                    (fn nil => Lisp.zero
+                      | (n::nil) => Lisp.negNum n
+                      | (n::ns) =>
+                        let
+                          fun f (a, b) = Lisp.subNum (b, a)
+                        in
+                          (*
+                           * foldl f i [i0,i1,...,iN]; where f(a,b) = b-a
+                           * = f(iN,...,f(i1,f(i0,i)))
+                           * = (((i-i0)-i1)-...-iN)
+                           *)
+                          List.foldl f n ns
+                        end)),
+       Lisp.subr0R ("*",
+                    (fn ns =>
+                        let
+                          fun f (a, b) = Lisp.mulNum (b, a)
+                        in
+                          (*
+                           * foldl f i [i0,i1,...,iN]; where f(a,b) = b*a
+                           * = f(iN,...,f(i1,f(i0,i)))
+                           * = (((i*i0)*i1)*...*iN)
+                           *)
+                          List.foldl f Lisp.one ns
+                        end)),
+       Lisp.subr2 ("/", Lisp.quoNum),
+       Lisp.subr2 ("%", Lisp.remNum),
+       Lisp.subr2 ("=", Lisp.bool o Lisp.eqNum),
+       Lisp.subr2 (">", Lisp.bool o Lisp.gtNum),
+       Lisp.subr2 ("<", Lisp.bool o Lisp.ltNum),
+       Lisp.subr2 (">=", Lisp.bool o Lisp.geNum),
+       Lisp.subr2 ("<=", Lisp.bool o Lisp.leNum),
+       Lisp.subr1 ("not", Lisp.not),
+       Lisp.subr0 ("read", fn () => Reader.read stdIn),
+       Lisp.subr1 ("print",
+                   (fn obj => Printer.print (stdOut, obj))),
+       Lisp.subr1 ("print-string",
+                   (fn obj =>
+                       Printer.printString (stdOut, Lisp.toString obj))),
+       Lisp.subr0 ("terpri",
+                   (fn () => Printer.terpri stdOut)),
+       Lisp.subr0 ("flush",
+                   (fn () => Printer.flush stdOut)),
+       Lisp.subr1R ("format",
+                    (fn (fmt,args) =>
+                        Printer.format (stdOut, Lisp.toString fmt, args))),
+       Lisp.subr2 ("eval",
+                   (fn (exp, env) =>
+                       Evaluator.eval exp env)),
+       Lisp.subr2 ("apply",
+                   (fn (proc, args) =>
+                       Evaluator.apply proc (Lisp.toList args))),
+       Lisp.subr1 ("expand-syntax",
+                   (fn exp =>
+                       if Syntax.isDerived exp then
+                         Syntax.expandDerived exp
+                       else
+                         exp)),
+       Lisp.subr1R ("error",
+                    (fn (fmt,args) =>
+                        raise Lisp.Error (Lisp.toString fmt, args)))]
 
   fun setupEnv () =
       let
-        fun primitiveProcNames () =
-            map #1 primitiveProcedures
-        fun primitiveProcObjects () =
-            map #2 primitiveProcedures
+        val subrName = Lisp.sym o Lisp.subrName
         val env = Lisp.extendEnv (Lisp.newEnv ())
-                                 (primitiveProcNames (),
-                                  primitiveProcObjects ())
-        val (envFnName, envFnObj) =
-            subr0 ("user-init-env", fn () => env)
+                                 (map subrName subrs, subrs)
+        val userInitEnv = Lisp.subr0 ("user-init-env", fn () => env)
       in
         Lisp.defineEnv env (Syntax.TRUE, Lisp.t);
         Lisp.defineEnv env (Syntax.FALSE, Lisp.f);
-        Lisp.defineEnv env (envFnName, envFnObj);
+        Lisp.defineEnv env (subrName userInitEnv, userInitEnv);
         env
       end
 
