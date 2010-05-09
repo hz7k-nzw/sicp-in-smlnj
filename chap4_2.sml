@@ -2,7 +2,7 @@
  * SICP in SML/NJ
  * by Kenji Nozawa (hz7k-nzw@asahi-net.or.jp)
  *
- * Dependency: util.sml, chap4_1.sml;
+ * Dependency: util.sml, chap1_2.sml, chap4_1.sml;
  *)
 
 structure U = Util;
@@ -15,19 +15,19 @@ structure R = Util.Real;
 
 (* 4.2.2  An Interpreter with Lazy Evaluation *)
 
-functor LispEvaluatorFn'' (structure Lisp: LISP
+functor LispEvaluatorFn'' (structure Obj: LISP_OBJECT
                            and Syntax: LISP_SYNTAX
-                           sharing type Syntax.obj = Lisp.obj
-                           val log : string * Lisp.obj list -> unit)
+                           sharing type Syntax.obj = Obj.t
+                           val log : string * Obj.t list -> unit)
         : LISP_EVALUATOR =
 struct
-  type obj = Lisp.obj
+  type obj = Obj.t
 
   fun eval' exp env =
       if Syntax.isSelfEvaluating exp then
         exp
       else if Syntax.isVariable exp then
-        Lisp.lookupEnv env exp
+        Obj.lookupEnv env exp
       else if Syntax.isQuoted exp then
         Syntax.textOfQuotation exp
       else if Syntax.isAssignment exp then
@@ -47,119 +47,119 @@ struct
                (Syntax.operands exp)
                env
       else
-        raise Lisp.Error ("Unknown expression type -- eval: ~S",
-                          [exp])
+        raise Obj.Error ("Unknown expression type -- eval: ~S",
+                         [exp])
 
   and evalAssignment exp env =
-      (Lisp.setEnv env (Syntax.assignmentVariable exp,
-                        eval' (Syntax.assignmentValue exp) env);
+      (Obj.setEnv env (Syntax.assignmentVariable exp,
+                       eval' (Syntax.assignmentValue exp) env);
        Syntax.assignmentVariable exp)
 
   and evalDefinition exp env =
-      (Lisp.defineEnv env (Syntax.definitionVariable exp,
-                           eval' (Syntax.definitionValue exp) env);
+      (Obj.defineEnv env (Syntax.definitionVariable exp,
+                          eval' (Syntax.definitionValue exp) env);
        Syntax.definitionVariable exp)
 
   and evalIf exp env =
-      if Lisp.isTrue (actualValue (Syntax.ifPredicate exp) env) then
+      if Obj.isTrue (actualValue (Syntax.ifPredicate exp) env) then
         eval' (Syntax.ifConsequent exp) env
       else
         eval' (Syntax.ifAlternative exp) env
 
   and evalLambda exp env =
-      Lisp.expr (Syntax.lambdaParameters exp,
-                 Syntax.lambdaBody exp,
-                 env)
+      Obj.expr (Syntax.lambdaParameters exp,
+                Syntax.lambdaBody exp,
+                env)
 
   and evalSequence exp env =
-      if Lisp.isNull exp then
-        raise Lisp.Error ("Empty sequence -- evalSequence",
-                          nil)
-      else if Lisp.isCons exp then
+      if Obj.isNull exp then
+        raise Obj.Error ("Empty sequence -- evalSequence",
+                         nil)
+      else if Obj.isCons exp then
         let
-          val car = Lisp.car exp
-          val cdr = Lisp.cdr exp
+          val car = Obj.car exp
+          val cdr = Obj.cdr exp
         in
-          if Lisp.isNull cdr then
+          if Obj.isNull cdr then
             eval' car env
           else
             (eval' car env; evalSequence cdr env)
         end
       else
-        raise Lisp.Error ("Improper sequence -- evalSequence: ~S",
-                          [exp])
+        raise Obj.Error ("Improper sequence -- evalSequence: ~S",
+                         [exp])
 
   and apply' proc args env =
-      if Lisp.isSubr proc then
-        Lisp.applySubr proc (listOfArgValues args env)
-      else if Lisp.isExpr proc then
+      if Obj.isSubr proc then
+        Obj.applySubr proc (listOfArgValues args env)
+      else if Obj.isExpr proc then
         let
-          val body = Lisp.exprBody proc
-          val lexEnv = Lisp.exprEnv proc
-          val params = Lisp.toList (Lisp.exprParams proc)
+          val body = Obj.exprBody proc
+          val lexEnv = Obj.exprEnv proc
+          val params = Obj.toList (Obj.exprParams proc)
           val delayedArgs = listOfDelayedArgs args env
         in
-          evalSequence body (Lisp.extendEnv
+          evalSequence body (Obj.extendEnv
                                  lexEnv (params, delayedArgs))
         end
       else
-        raise Lisp.Error ("Not a procedure -- apply': ~S",
-                          [proc])
+        raise Obj.Error ("Not a procedure -- apply': ~S",
+                         [proc])
 
   and listOfArgValues exps env =
-      if Lisp.isNull exps then
+      if Obj.isNull exps then
         nil
-      else if Lisp.isCons exps then
+      else if Obj.isCons exps then
         let
-          val car = Lisp.car exps
-          val cdr = Lisp.cdr exps
+          val car = Obj.car exps
+          val cdr = Obj.cdr exps
           val v = actualValue car env
           val vs = listOfArgValues cdr env
         in
           v :: vs
         end
       else
-        raise Lisp.Error ("Improper sequence -- listOfArgValues: ~S",
-                          [exps])
+        raise Obj.Error ("Improper sequence -- listOfArgValues: ~S",
+                         [exps])
 
   and listOfDelayedArgs exps env =
-      if Lisp.isNull exps then
+      if Obj.isNull exps then
         nil
-      else if Lisp.isCons exps then
+      else if Obj.isCons exps then
         let
-          val car = Lisp.car exps
-          val cdr = Lisp.cdr exps
+          val car = Obj.car exps
+          val cdr = Obj.cdr exps
           val v = delayIt car env
           val vs = listOfDelayedArgs cdr env
         in
           v :: vs
         end
       else
-        raise Lisp.Error ("Improper sequence -- listOfDelayedArgs: ~S",
-                          [exps])
+        raise Obj.Error ("Improper sequence -- listOfDelayedArgs: ~S",
+                         [exps])
 
   and actualValue exp env =
       (log ("actualValue called: ~S", [exp]);
        forceIt (eval' exp env))
-(*
+  (*
+   and forceIt obj =
+       (log ("forceIt called: ~S", [obj]);
+        if Obj.isThunk obj then
+          actualValue (Obj.thunkExp obj) (Obj.thunkEnv obj)
+        else
+          obj)
+   *)
   and forceIt obj =
       (log ("forceIt called: ~S", [obj]);
-       if Lisp.isThunk obj then
-         actualValue (Lisp.thunkExp obj) (Lisp.thunkEnv obj)
-       else
-         obj)
- *)
-  and forceIt obj =
-      (log ("forceIt called: ~S", [obj]);
-       if Lisp.isThunk obj then
-         if Lisp.isEvaluated obj then
-           Lisp.thunkValue obj
+       if Obj.isThunk obj then
+         if Obj.isEvaluated obj then
+           Obj.thunkValue obj
          else
            let
-             val ret = actualValue (Lisp.thunkExp obj)
-                                   (Lisp.thunkEnv obj)
+             val ret = actualValue (Obj.thunkExp obj)
+                                   (Obj.thunkEnv obj)
            in
-             Lisp.setThunkValue obj ret;
+             Obj.setThunkValue obj ret;
              ret
            end
        else
@@ -167,7 +167,7 @@ struct
 
   and delayIt obj env =
       (log ("delayIt called: ~S", [obj]);
-       Lisp.thunk (obj, env))
+       Obj.thunk (obj, env))
 
   (* declared in LISP_EVALUATOR signature *)
   fun eval exp env =
@@ -175,41 +175,45 @@ struct
 
   (* declared in LISP_EVALUATOR signature *)
   fun apply proc args =
-      if Lisp.isSubr proc then
-        Lisp.applySubr proc args
-      else if Lisp.isExpr proc then
+      if Obj.isSubr proc then
+        Obj.applySubr proc args
+      else if Obj.isExpr proc then
         let
-          val body = Lisp.exprBody proc
-          val env = Lisp.exprEnv proc
-          val params = Lisp.toList (Lisp.exprParams proc)
+          val body = Obj.exprBody proc
+          val env = Obj.exprEnv proc
+          val params = Obj.toList (Obj.exprParams proc)
         in
-          evalSequence body (Lisp.extendEnv env (params, args))
+          evalSequence body (Obj.extendEnv env (params, args))
         end
       else
-        raise Lisp.Error ("Not a procedure -- apply: ~S",
-                          [proc])
+        raise Obj.Error ("Not a procedure -- apply: ~S",
+                         [proc])
 end;
 
 local
-  structure E = Env
-  structure L = LispFn (structure Env = E)
-  structure LS = LispSyntaxFn (structure Lisp = L)
-  structure LR = LispReaderFn (structure Lisp = L and Syntax = LS)
-  structure LP = LispPrinterFn (structure Lisp = L and Syntax = LS)
-  fun log (_, _) = () (* null-logger *)
-  (*
-  fun log (ctrlstr, args) =
-      (LP.format (L.stdErr, ctrlstr, args);
-       LP.terpri L.stdErr)
-   *)
-  structure LE = LispEvaluatorFn'' (structure Lisp = L and Syntax = LS
-                                    val log = log)
+  structure Lisp : LISP =
+  struct
+    structure Obj
+      = LispObjectFn (structure Env = Env)
+    structure Syntax
+      = LispSyntaxFn (structure Obj = Obj)
+    structure Reader
+      = LispReaderFn (structure Obj = Obj and Syntax = Syntax)
+    structure Printer
+      = LispPrinterFn (structure Obj = Obj and Syntax = Syntax)
+    fun log (_, _) = () (* null-logger *)
+    (*
+     fun log (ctrlstr, args) =
+         (LP.format (L.stdErr, ctrlstr, args);
+          LP.terpri L.stdErr)
+     *)
+    structure Evaluator
+      = LispEvaluatorFn'' (structure Obj = Obj and Syntax = Syntax
+                           val log = log)
+  end
+  structure Runtime = LispRuntimeFn (Lisp)
 in
-structure LI'' = LispInterpreterFn (structure Lisp = L
-                                    and Syntax = LS
-                                    and Reader = LR
-                                    and Printer = LP
-                                    and Evaluator = LE)
+structure LI'' = LispInterpreterFn (Runtime)
 end;
 
 (*

@@ -2,7 +2,7 @@
  * SICP in SML/NJ
  * by Kenji Nozawa (hz7k-nzw@asahi-net.or.jp)
  *
- * Dependency: util.sml;
+ * Dependency: util.sml, chap1_2.sml;
  *)
 
 structure U = Util;
@@ -12,145 +12,145 @@ structure R = Util.Real;
 (* 4  Metalinguistic Abstraction *)
 (* 4.1  The Metacircular Evaluator *)
 
-signature LISP =
+signature LISP_OBJECT =
 sig
-  type obj (* type for lisp object *)
+  type t (* type for lisp object *)
 
-  exception Error of string * obj list
+  exception Error of string * t list
 
   (* constants *)
-  val undef : obj
-  val eof : obj
-  val null : obj
-  val t : obj
-  val f : obj
-  val zero : obj
-  val one : obj
-  val stdIn : obj
-  val stdOut : obj
-  val stdErr : obj
+  val undef : t
+  val eof : t
+  val null : t
+  val T : t
+  val F : t
+  val zero : t
+  val one : t
+  val stdIn : t
+  val stdOut : t
+  val stdErr : t
 
   (* constructors *)
-  val cons : obj * obj -> obj
-  val sym : string -> obj
-  val bool : bool -> obj
-  val int : int -> obj
-  val real : real -> obj
-  val str : string -> obj
-  val subr0 : string * (unit -> obj) -> obj
-  val subr1 : string * (obj -> obj) -> obj
-  val subr2 : string * (obj * obj -> obj) -> obj
-  val subr3 : string * (obj * obj * obj -> obj) -> obj
-  val subr0R : string * (obj list -> obj) -> obj
-  val subr1R : string * (obj * obj list -> obj) -> obj
-  val subr2R : string * (obj * obj * obj list -> obj) -> obj
-  val subr3R : string * (obj * obj * obj * obj list -> obj) -> obj
-  val expr : obj * obj * obj -> obj
-  val inputStream : TextIO.instream -> obj
-  val outputSream : TextIO.outstream -> obj
-  val thunk : obj * obj -> obj (* used in chap4_2.sml *)
+  val cons : t * t -> t
+  val sym : string -> t
+  val bool : bool -> t
+  val int : int -> t
+  val real : real -> t
+  val str : string -> t
+  val subr0 : string * (unit -> t) -> t
+  val subr1 : string * (t -> t) -> t
+  val subr2 : string * (t * t -> t) -> t
+  val subr3 : string * (t * t * t -> t) -> t
+  val subr0R : string * (t list -> t) -> t
+  val subr1R : string * (t * t list -> t) -> t
+  val subr2R : string * (t * t * t list -> t) -> t
+  val subr3R : string * (t * t * t * t list -> t) -> t
+  val expr : t * t * t -> t
+  val inputStream : TextIO.instream -> t
+  val outputSream : TextIO.outstream -> t
+  val thunk : t * t -> t (* used in chap4_2.sml *)
 
   (* predicates for equality tests *)
-  val eq : obj * obj -> bool
-  val equal : obj * obj -> bool
+  val eq : t * t -> bool
+  val equal : t * t -> bool
 
-  (* obj <-> (sml) list *)
-  val fromList : obj list -> obj
-  val toList : obj -> obj list
+  (* t <-> (sml) list *)
+  val fromList : t list -> t
+  val toList : t -> t list
 
   (* predicates for boolean tests *)
-  val isTrue : obj -> bool
-  val isFalse : obj -> bool
+  val isTrue : t -> bool
+  val isFalse : t -> bool
 
   (* predicates for data type tests *)
-  val isUndef : obj -> bool
-  val isEof : obj -> bool
-  val isNull : obj -> bool
-  val isBool : obj -> bool
-  val isCons : obj -> bool
-  val isSym : obj -> bool
-  val isNum : obj -> bool
-  val isStr : obj -> bool
-  val isSubr : obj -> bool
-  val isExpr : obj -> bool
-  val isInputStream : obj -> bool
-  val isOutputStream : obj -> bool
-  val isEnv : obj -> bool
-  val isThunk : obj -> bool (* used in chap4_2.sml *)
+  val isUndef : t -> bool
+  val isEof : t -> bool
+  val isNull : t -> bool
+  val isBool : t -> bool
+  val isCons : t -> bool
+  val isSym : t -> bool
+  val isNum : t -> bool
+  val isStr : t -> bool
+  val isSubr : t -> bool
+  val isExpr : t -> bool
+  val isInputStream : t -> bool
+  val isOutputStream : t -> bool
+  val isEnv : t -> bool
+  val isThunk : t -> bool (* used in chap4_2.sml *)
 
   (* for cons *)
-  val car : obj -> obj
-  val cdr : obj -> obj
-  val caar : obj -> obj
-  val cadr : obj -> obj
-  val cdar : obj -> obj
-  val cddr : obj -> obj
-  val caaar : obj -> obj
-  val caadr : obj -> obj
-  val cadar : obj -> obj
-  val cdaar : obj -> obj
-  val caddr : obj -> obj
-  val cdadr : obj -> obj
-  val cddar : obj -> obj
-  val cdddr : obj -> obj
-  val setCar : obj -> obj -> obj
-  val setCdr : obj -> obj -> obj
-  val map : (obj -> obj) -> obj -> obj
-  val append : (obj * obj) -> obj
+  val car : t -> t
+  val cdr : t -> t
+  val caar : t -> t
+  val cadr : t -> t
+  val cdar : t -> t
+  val cddr : t -> t
+  val caaar : t -> t
+  val caadr : t -> t
+  val cadar : t -> t
+  val cdaar : t -> t
+  val caddr : t -> t
+  val cdadr : t -> t
+  val cddar : t -> t
+  val cdddr : t -> t
+  val setCar : t -> t -> t
+  val setCdr : t -> t -> t
+  val map : (t -> t) -> t -> t
+  val append : (t * t) -> t
 
   (* for symbol *)
-  val pname : obj -> string
+  val pname : t -> string
 
   (* for bool *)
-  val toBool : obj -> bool
-  val not : obj -> obj
+  val toBool : t -> bool
+  val not : t -> t
 
   (* for num *)
-  val isInt : obj -> bool
-  val isReal : obj -> bool
-  val toInt : obj -> int
-  val toReal : obj -> real
-  val negNum : obj -> obj
-  val addNum : (obj * obj) -> obj
-  val subNum : (obj * obj) -> obj
-  val mulNum : (obj * obj) -> obj
-  val quoNum : (obj * obj) -> obj
-  val remNum : (obj * obj) -> obj
-  val eqNum : (obj * obj) -> bool
-  val gtNum : (obj * obj) -> bool
-  val geNum : (obj * obj) -> bool
-  val ltNum : (obj * obj) -> bool
-  val leNum : (obj * obj) -> bool
+  val isInt : t -> bool
+  val isReal : t -> bool
+  val toInt : t -> int
+  val toReal : t -> real
+  val negNum : t -> t
+  val addNum : (t * t) -> t
+  val subNum : (t * t) -> t
+  val mulNum : (t * t) -> t
+  val quoNum : (t * t) -> t
+  val remNum : (t * t) -> t
+  val eqNum : (t * t) -> bool
+  val gtNum : (t * t) -> bool
+  val geNum : (t * t) -> bool
+  val ltNum : (t * t) -> bool
+  val leNum : (t * t) -> bool
 
   (* for string *)
-  val toString : obj -> string
+  val toString : t -> string
 
   (* for subr (primitive procedure) *)
-  val subrName : obj -> string
-  val applySubr : obj -> obj list -> obj
+  val subrName : t -> string
+  val applySubr : t -> t list -> t
 
   (* for expr (compound procedure) *)
-  val exprParams : obj -> obj
-  val exprBody : obj -> obj
-  val exprEnv : obj -> obj
+  val exprParams : t -> t
+  val exprBody : t -> t
+  val exprEnv : t -> t
 
   (* for input/output stream *)
-  val toInstream : obj -> TextIO.instream
-  val toOutstream : obj -> TextIO.outstream
+  val toInstream : t -> TextIO.instream
+  val toOutstream : t -> TextIO.outstream
 
   (* for env *)
-  val newEnv : unit -> obj
-  val lookupEnv : obj -> obj -> obj
-  val extendEnv : obj -> (obj list * obj list) -> obj
-  val defineEnv : obj -> (obj * obj) -> obj
-  val setEnv : obj -> (obj * obj) -> obj
+  val newEnv : unit -> t
+  val lookupEnv : t -> t -> t
+  val extendEnv : t -> (t list * t list) -> t
+  val defineEnv : t -> (t * t) -> t
+  val setEnv : t -> (t * t) -> t
 
   (* for thunk: used in chap4_2.sml *)
-  val thunkExp : obj -> obj
-  val thunkEnv : obj -> obj
-  val thunkValue : obj -> obj
-  val setThunkValue : obj -> obj -> obj
-  val isEvaluated : obj -> bool
+  val thunkExp : t -> t
+  val thunkEnv : t -> t
+  val thunkValue : t -> t
+  val setThunkValue : t -> t -> t
+  val isEvaluated : t -> bool
 end;
 
 signature LISP_SYNTAX =
@@ -259,18 +259,18 @@ end;
 
 (* 4.1.1  The Core of the Evaluator *)
 
-functor LispEvaluatorFn (structure Lisp: LISP
+functor LispEvaluatorFn (structure Obj: LISP_OBJECT
                          and Syntax: LISP_SYNTAX
-                         sharing type Syntax.obj = Lisp.obj)
+                         sharing type Syntax.obj = Obj.t)
         : LISP_EVALUATOR =
 struct
-  type obj = Lisp.obj
+  type obj = Obj.t
 
   fun eval exp env =
       if Syntax.isSelfEvaluating exp then
         exp
       else if Syntax.isVariable exp then
-        Lisp.lookupEnv env exp
+        Obj.lookupEnv env exp
       else if Syntax.isQuoted exp then
         Syntax.textOfQuotation exp
       else if Syntax.isAssignment exp then
@@ -289,70 +289,70 @@ struct
         apply (eval (Syntax.operator exp) env)
               (listOfValues (Syntax.operands exp) env)
       else
-        raise Lisp.Error ("Unknown expression type -- eval: ~S",
-                          [exp])
+        raise Obj.Error ("Unknown expression type -- eval: ~S",
+                         [exp])
 
   and evalAssignment exp env =
-      (Lisp.setEnv env (Syntax.assignmentVariable exp,
-                        eval (Syntax.assignmentValue exp) env);
+      (Obj.setEnv env (Syntax.assignmentVariable exp,
+                       eval (Syntax.assignmentValue exp) env);
        Syntax.assignmentVariable exp)
 
   and evalDefinition exp env =
-      (Lisp.defineEnv env (Syntax.definitionVariable exp,
-                           eval (Syntax.definitionValue exp) env);
+      (Obj.defineEnv env (Syntax.definitionVariable exp,
+                          eval (Syntax.definitionValue exp) env);
        Syntax.definitionVariable exp)
 
   and evalIf exp env =
-      if Lisp.isTrue (eval (Syntax.ifPredicate exp) env) then
+      if Obj.isTrue (eval (Syntax.ifPredicate exp) env) then
         eval (Syntax.ifConsequent exp) env
       else
         eval (Syntax.ifAlternative exp) env
 
   and evalLambda exp env =
-      Lisp.expr (Syntax.lambdaParameters exp,
-                 Syntax.lambdaBody exp,
-                 env)
+      Obj.expr (Syntax.lambdaParameters exp,
+                Syntax.lambdaBody exp,
+                env)
 
   and evalSequence exp env =
-      if Lisp.isNull exp then
-        raise Lisp.Error ("Empty sequence -- evalSequence",
-                          nil)
-      else if Lisp.isCons exp then
+      if Obj.isNull exp then
+        raise Obj.Error ("Empty sequence -- evalSequence",
+                         nil)
+      else if Obj.isCons exp then
         let
-          val car = Lisp.car exp
-          val cdr = Lisp.cdr exp
+          val car = Obj.car exp
+          val cdr = Obj.cdr exp
         in
-          if Lisp.isNull cdr then
+          if Obj.isNull cdr then
             eval car env
           else
             (eval car env; evalSequence cdr env)
         end
       else
-        raise Lisp.Error ("Improper sequence -- evalSequence: ~S",
-                          [exp])
+        raise Obj.Error ("Improper sequence -- evalSequence: ~S",
+                         [exp])
 
   and apply proc args =
-      if Lisp.isSubr proc then
-        Lisp.applySubr proc args
-      else if Lisp.isExpr proc then
+      if Obj.isSubr proc then
+        Obj.applySubr proc args
+      else if Obj.isExpr proc then
         let
-          val body = Lisp.exprBody proc
-          val env = Lisp.exprEnv proc
-          val params = Lisp.toList (Lisp.exprParams proc)
+          val body = Obj.exprBody proc
+          val env = Obj.exprEnv proc
+          val params = Obj.toList (Obj.exprParams proc)
         in
-          evalSequence body (Lisp.extendEnv env (params, args))
+          evalSequence body (Obj.extendEnv env (params, args))
         end
       else
-        raise Lisp.Error ("Not a procedure -- apply: ~S",
-                          [proc])
+        raise Obj.Error ("Not a procedure -- apply: ~S",
+                         [proc])
 
   and listOfValues exps env =
-      if Lisp.isNull exps then
+      if Obj.isNull exps then
         nil
-      else if Lisp.isCons exps then
+      else if Obj.isCons exps then
         let
-          val car = Lisp.car exps
-          val cdr = Lisp.cdr exps
+          val car = Obj.car exps
+          val cdr = Obj.cdr exps
           (* evaluates operands from left to right *)
           val v = eval car env
           val vs = listOfValues cdr env
@@ -360,16 +360,16 @@ struct
           v :: vs
         end
       else
-        raise Lisp.Error ("Improper sequence -- listOfValues: ~S",
-                          [exps])
+        raise Obj.Error ("Improper sequence -- listOfValues: ~S",
+                         [exps])
 end;
 
-functor LispReaderFn (structure Lisp: LISP
+functor LispReaderFn (structure Obj: LISP_OBJECT
                       and Syntax: LISP_SYNTAX
-                      sharing type Syntax.obj = Lisp.obj)
+                      sharing type Syntax.obj = Obj.t)
         : LISP_READER =
 struct
-  type obj = Lisp.obj
+  type obj = Obj.t
 
   datatype token = Literal of string
                  | LParen
@@ -385,11 +385,11 @@ struct
                     bool ref * (* unread flag *)
                     TextIO.instream (* input stream *)
 
-  fun readError (msg) = raise Lisp.Error (msg, nil)
+  fun readError (msg) = raise Obj.Error (msg, nil)
 
   fun read is =
       let
-        val istream = Lisp.toInstream is
+        val istream = Obj.toInstream is
       in
         doRead istream
       end
@@ -400,7 +400,7 @@ struct
       in
         readToken ts;
         case getToken ts of
-          Eof => Lisp.eof
+          Eof => Obj.eof
         | _ => (unreadToken ts; parseObj ts)
       end
 
@@ -428,24 +428,24 @@ struct
               else NONE
             | NONE => NONE
         fun parseReal ss =
-              case Real.scan Substring.getc ss of
-                SOME (r, ss') =>
-                if Substring.isEmpty ss' then SOME r
-                else NONE
-              | NONE => NONE
+            case Real.scan Substring.getc ss of
+              SOME (r, ss') =>
+              if Substring.isEmpty ss' then SOME r
+              else NONE
+            | NONE => NONE
       in
         case parseInt ss of
-          SOME i => Lisp.int i
+          SOME i => Obj.int i
         | NONE =>
           (case parseReal ss of
-             SOME r => Lisp.real r
-           | NONE => Lisp.sym s)
+             SOME r => Obj.real r
+           | NONE => Obj.sym s)
       end
 
   and parseCons ts =
       (readToken ts;
        case getToken ts of
-         RParen => Lisp.null
+         RParen => Obj.null
        | _ =>
          (unreadToken ts;
           let
@@ -453,21 +453,21 @@ struct
           in
             readToken ts;
             case getToken ts of
-              RParen => Lisp.cons (car, Lisp.null)
+              RParen => Obj.cons (car, Obj.null)
             | Dot =>
               let
                 val cdr = parseObj ts
               in
                 readToken ts;
                 case getToken ts of
-                  RParen => Lisp.cons (car, cdr)
+                  RParen => Obj.cons (car, cdr)
                 | _ => readError ("Right paren expected")
               end
             | _ =>
               let
                 val cdr = (unreadToken ts; parseCons ts)
               in
-                Lisp.cons (car, cdr)
+                Obj.cons (car, cdr)
               end
           end))
 
@@ -501,7 +501,7 @@ struct
                readError ("Unexpected eof"))
             else if isEos () then
               (U.log "c=\\\"(EOS)";
-               Lisp.str s)
+               Obj.str s)
             else
               let
                 val c = scan ()
@@ -585,20 +585,20 @@ struct
       end
 end;
 
-functor LispPrinterFn (structure Lisp: LISP
+functor LispPrinterFn (structure Obj: LISP_OBJECT
                       and Syntax: LISP_SYNTAX
-                      sharing type Syntax.obj = Lisp.obj)
+                      sharing type Syntax.obj = Obj.t)
         : LISP_PRINTER =
 struct
-  type obj = Lisp.obj
+  type obj = Obj.t
 
   fun print (os, obj) =
       let
-        val ostream = Lisp.toOutstream os
+        val ostream = Obj.toOutstream os
       in
         doPrint (ostream, obj);
         TextIO.flushOut ostream;
-        Lisp.undef
+        Obj.undef
       end
 
   and doPrint (ostream, obj) =
@@ -606,91 +606,91 @@ struct
         fun p s =
             TextIO.output (ostream, s)
         and p1 obj =
-            if Lisp.isNull obj then
+            if Obj.isNull obj then
               p "()"
-            else if Lisp.isCons obj then
+            else if Obj.isCons obj then
               (p "(";
-               p1 (Lisp.car obj);
-               p2 (Lisp.cdr obj);
+               p1 (Obj.car obj);
+               p2 (Obj.cdr obj);
                p ")")
-            else if Lisp.isSym obj then
+            else if Obj.isSym obj then
               pSym obj
-            else if Lisp.isBool obj then
+            else if Obj.isBool obj then
               pBool obj
-            else if Lisp.isNum obj then
+            else if Obj.isNum obj then
               pNum obj
-            else if Lisp.isStr obj then
+            else if Obj.isStr obj then
               pStr obj
-            else if Lisp.isSubr obj then
+            else if Obj.isSubr obj then
               pSubr obj
-            else if Lisp.isExpr obj then
+            else if Obj.isExpr obj then
               pExpr obj
-            else if Lisp.isInputStream obj then
+            else if Obj.isInputStream obj then
               pInputStream obj
-            else if Lisp.isOutputStream obj then
+            else if Obj.isOutputStream obj then
               pOutputStream obj
-            else if Lisp.isEnv obj then
+            else if Obj.isEnv obj then
               pEnv obj
-            else if Lisp.isUndef obj then
+            else if Obj.isUndef obj then
               pUndef obj
-            else if Lisp.isThunk obj then
+            else if Obj.isThunk obj then
               pThunk obj
             else
               pUnknown obj
         and p2 obj =
-            if Lisp.isNull obj then
+            if Obj.isNull obj then
               ()
-            else if Lisp.isCons obj then
+            else if Obj.isCons obj then
               (p " ";
-               p1 (Lisp.car obj);
-               p2 (Lisp.cdr obj))
-            else if Lisp.isSym obj then
+               p1 (Obj.car obj);
+               p2 (Obj.cdr obj))
+            else if Obj.isSym obj then
               (p " . "; pSym obj)
-            else if Lisp.isBool obj then
+            else if Obj.isBool obj then
               (p " . "; pBool obj)
-            else if Lisp.isNum obj then
+            else if Obj.isNum obj then
               (p " . "; pNum obj)
-            else if Lisp.isStr obj then
+            else if Obj.isStr obj then
               (p " . "; pStr obj)
-            else if Lisp.isSubr obj then
+            else if Obj.isSubr obj then
               (p " . "; pSubr obj)
-            else if Lisp.isExpr obj then
+            else if Obj.isExpr obj then
               (p " . "; pExpr obj)
-            else if Lisp.isInputStream obj then
+            else if Obj.isInputStream obj then
               (p " . "; pInputStream obj)
-            else if Lisp.isOutputStream obj then
+            else if Obj.isOutputStream obj then
               (p " . "; pOutputStream obj)
-            else if Lisp.isEnv obj then
+            else if Obj.isEnv obj then
               (p " . "; pEnv obj)
-            else if Lisp.isUndef obj then
+            else if Obj.isUndef obj then
               (p " . "; pUndef obj)
-            else if Lisp.isThunk obj then
+            else if Obj.isThunk obj then
               (p " . "; pThunk obj)
             else
               (p " . "; pUnknown obj)
         and pSym obj =
-            p (Lisp.pname obj)
+            p (Obj.pname obj)
         and pBool obj =
-            if Lisp.toBool obj then p "#T" else p "#F"
+            if Obj.toBool obj then p "#T" else p "#F"
         and pNum obj =
-            if Lisp.isInt obj then
-              p (Int.toString (Lisp.toInt obj))
-            else if Lisp.isReal obj then
-              p (Real.toString (Lisp.toReal obj))
+            if Obj.isInt obj then
+              p (Int.toString (Obj.toInt obj))
+            else if Obj.isReal obj then
+              p (Real.toString (Obj.toReal obj))
             else
               p "#<Unknown Number>"
         and pStr obj =
             (p "\"";
-             p (String.toString (Lisp.toString obj));
+             p (String.toString (Obj.toString obj));
              p "\"")
         and pSubr obj =
             (p "#<Subr: ";
-             p (Lisp.subrName obj);
+             p (Obj.subrName obj);
              p ">")
         and pExpr obj =
             let
-              val params = Lisp.exprParams obj
-              val body = Lisp.exprBody obj
+              val params = Obj.exprParams obj
+              val body = Obj.exprBody obj
             in
               (p "#<Expr: ";
                p1 (Syntax.makeLambda (params, body));
@@ -706,9 +706,9 @@ struct
             p "#<Undef>"
         and pThunk obj =
             let
-              val evaluated = Lisp.isEvaluated obj
-              val content = if evaluated then Lisp.thunkValue obj
-                            else Lisp.thunkExp obj
+              val evaluated = Obj.isEvaluated obj
+              val content = if evaluated then Obj.thunkValue obj
+                            else Obj.thunkExp obj
             in
               (p "#<Thunk";
                if evaluated then p "(evaluated): "
@@ -724,28 +724,28 @@ struct
 
   fun printString (os, s) =
       let
-        val ostream = Lisp.toOutstream os
+        val ostream = Obj.toOutstream os
       in
         TextIO.output (ostream, s);
         TextIO.flushOut ostream;
-        Lisp.undef
+        Obj.undef
       end
 
   fun terpri os =
       let
-        val ostream = Lisp.toOutstream os
+        val ostream = Obj.toOutstream os
       in
         TextIO.output (ostream, "\n");
         TextIO.flushOut ostream;
-        Lisp.undef
+        Obj.undef
       end
 
   fun flush os =
       let
-        val ostream = Lisp.toOutstream os
+        val ostream = Obj.toOutstream os
       in
         TextIO.flushOut ostream;
-        Lisp.undef
+        Obj.undef
       end
 
   fun format (os, ctrlstr, args) =
@@ -784,8 +784,8 @@ struct
               else if Substring.isPrefix "%" ss then
                 (Newline, Substring.triml 1 ss)
               else
-                raise Lisp.Error ("Unexpected ctrlstr: " ^
-                                  Substring.string ss, nil)
+                raise Obj.Error ("Unexpected ctrlstr: " ^
+                                 Substring.string ss, nil)
             end
 
         fun traverse (nil, _) = ()
@@ -794,72 +794,72 @@ struct
           | traverse (Sexp::fs, arg::args) =
             (print (os, arg); traverse (fs, args))
           | traverse (Sexp::_, nil) =
-            raise Lisp.Error ("Not enough arguments: " ^
-                              Substring.string ss, nil)
+            raise Obj.Error ("Not enough arguments: " ^
+                             Substring.string ss, nil)
           | traverse (Newline::fs, args) =
             (terpri os; traverse (fs, args))
       in
         traverse (parse ss, args);
-        Lisp.undef
+        Obj.undef
       end
 end;
 
 (* 4.1.2  Representing Expressions *)
 
-functor LispSyntaxFn (structure Lisp: LISP) : LISP_SYNTAX =
+functor LispSyntaxFn (structure Obj: LISP_OBJECT) : LISP_SYNTAX =
 struct
-  type obj = Lisp.obj
+  type obj = Obj.t
 
-  val AMB = Lisp.sym "amb"
-  val BEGIN = Lisp.sym "begin"
-  val DEFINE = Lisp.sym "define"
-  val FALSE = Lisp.sym "false"
-  val IF = Lisp.sym "if"
-  val LAMBDA = Lisp.sym "lambda"
-  val QUOTE = Lisp.sym "quote"
-  val SET = Lisp.sym "set!"
-  val TRUE = Lisp.sym "true"
+  val AMB = Obj.sym "amb"
+  val BEGIN = Obj.sym "begin"
+  val DEFINE = Obj.sym "define"
+  val FALSE = Obj.sym "false"
+  val IF = Obj.sym "if"
+  val LAMBDA = Obj.sym "lambda"
+  val QUOTE = Obj.sym "quote"
+  val SET = Obj.sym "set!"
+  val TRUE = Obj.sym "true"
 
-  val AND = Lisp.sym "and"
-  val ARROW = Lisp.sym "=>"
-  val COND = Lisp.sym "cond"
-  val ELSE = Lisp.sym "else"
-  val OR = Lisp.sym "or"
-  val LET = Lisp.sym "let"
-  val LET2 = Lisp.sym "let*"
-  val LETREC = Lisp.sym "letrec"
+  val AND = Obj.sym "and"
+  val ARROW = Obj.sym "=>"
+  val COND = Obj.sym "cond"
+  val ELSE = Obj.sym "else"
+  val OR = Obj.sym "or"
+  val LET = Obj.sym "let"
+  val LET2 = Obj.sym "let*"
+  val LETREC = Obj.sym "letrec"
 
   val useScanOutDefines = false
 
   fun isSelfEvaluating exp =
-      (*Lisp.isNull exp orelse*)
-      (*Lisp.isBool exp orelse*)
-      Lisp.isNum exp orelse
-      Lisp.isStr exp
+      (*Obj.isNull exp orelse*)
+      (*Obj.isBool exp orelse*)
+      Obj.isNum exp orelse
+      Obj.isStr exp
 
-  val isVariable = Lisp.isSym
+  val isVariable = Obj.isSym
 
   fun isTaggedList tag exp =
-      Lisp.isCons exp andalso
-      Lisp.eq (Lisp.car exp, tag)
+      Obj.isCons exp andalso
+      Obj.eq (Obj.car exp, tag)
 
   fun isQuoted exp = isTaggedList QUOTE exp
-  and textOfQuotation exp = Lisp.cadr exp
-  and makeQuote exp = Lisp.fromList [QUOTE, exp]
+  and textOfQuotation exp = Obj.cadr exp
+  and makeQuote exp = Obj.fromList [QUOTE, exp]
 
-  and makeTrue () = TRUE (* makeQuote Lisp.t *)
-  and makeFalse () = FALSE (* makeQuote Lisp.f *)
+  and makeTrue () = TRUE (* makeQuote Obj.T *)
+  and makeFalse () = FALSE (* makeQuote Obj.F *)
 
   and isLambda exp = isTaggedList LAMBDA exp
-  and lambdaParameters exp = Lisp.cadr exp
-  and lambdaBody exp = Lisp.cddr exp
+  and lambdaParameters exp = Obj.cadr exp
+  and lambdaBody exp = Obj.cddr exp
   and makeLambda (params, body) =
       let
         val body' = if useScanOutDefines then
                       scanOutDefines body
                     else body
       in
-        Lisp.cons (LAMBDA, Lisp.cons (params, body'))
+        Obj.cons (LAMBDA, Obj.cons (params, body'))
       end
   (*
    * Exercise 4.16
@@ -883,7 +883,7 @@ struct
        *)
       let
         val (defines, nonDefines) : obj list * obj list
-          = List.partition isDefinition (Lisp.toList body)
+          = List.partition isDefinition (Obj.toList body)
       in
         if null defines then
           body
@@ -893,7 +893,7 @@ struct
                 let
                   val dvar = definitionVariable exp
                 in
-                  Lisp.fromList [dvar, makeQuote Lisp.undef]
+                  Obj.fromList [dvar, makeQuote Obj.undef]
                 end
             fun toAssign exp =
                 let
@@ -903,97 +903,97 @@ struct
                   makeAssign (dvar, dval)
                 end
             val letParams : obj =
-                Lisp.fromList (List.map toInit defines)
+                Obj.fromList (List.map toInit defines)
             val letBody : obj list =
                 (List.map toAssign defines) @ nonDefines
             val letForm : obj =
-                Lisp.fromList (LET :: letParams :: letBody)
+                Obj.fromList (LET :: letParams :: letBody)
           in
-            Lisp.fromList [letForm]
+            Obj.fromList [letForm]
           end
       end
 
   and isAssignment exp = isTaggedList SET exp
-  and assignmentVariable exp = Lisp.cadr exp
-  and assignmentValue exp = Lisp.caddr exp
+  and assignmentVariable exp = Obj.cadr exp
+  and assignmentValue exp = Obj.caddr exp
   and makeAssign (variable, value) =
-      Lisp.fromList [SET, variable, value]
+      Obj.fromList [SET, variable, value]
 
   and isDefinition exp = isTaggedList DEFINE exp
   and definitionVariable exp =
       let
-        val cadr = Lisp.cadr exp
+        val cadr = Obj.cadr exp
       in
-        if Lisp.isSym cadr then cadr
-        else Lisp.car cadr
+        if Obj.isSym cadr then cadr
+        else Obj.car cadr
       end
   and definitionValue exp =
       let
-        val cadr = Lisp.cadr exp
+        val cadr = Obj.cadr exp
       in
-        if Lisp.isSym cadr then
-          Lisp.caddr exp
+        if Obj.isSym cadr then
+          Obj.caddr exp
         else
-          makeLambda (Lisp.cdr cadr, (* formal params *)
-                      Lisp.cddr exp) (* body *)
+          makeLambda (Obj.cdr cadr, (* formal params *)
+                      Obj.cddr exp) (* body *)
       end
   and makeDefinition (variable, value) =
-      Lisp.fromList [DEFINE, variable, value]
+      Obj.fromList [DEFINE, variable, value]
 
   and isIf exp = isTaggedList IF exp
-  and ifPredicate exp = Lisp.cadr exp
-  and ifConsequent exp = Lisp.caddr exp
+  and ifPredicate exp = Obj.cadr exp
+  and ifConsequent exp = Obj.caddr exp
   and ifAlternative exp =
       let
-        val cdddr = Lisp.cdddr exp
+        val cdddr = Obj.cdddr exp
       in
-        if Lisp.isNull cdddr then makeFalse ()
-        else Lisp.car cdddr
+        if Obj.isNull cdddr then makeFalse ()
+        else Obj.car cdddr
       end
   and makeIf (pred, con, alt) =
-      Lisp.fromList [IF, pred, con, alt]
+      Obj.fromList [IF, pred, con, alt]
 
   and isBegin exp = isTaggedList BEGIN exp
-  and beginActions exp = Lisp.cdr exp
-  and makeBegin actions = Lisp.cons (BEGIN, actions)
+  and beginActions exp = Obj.cdr exp
+  and makeBegin actions = Obj.cons (BEGIN, actions)
 
-  and isApplication exp = Lisp.isCons exp
-  and operator exp = Lisp.car exp
-  and operands exp = Lisp.cdr exp
+  and isApplication exp = Obj.isCons exp
+  and operator exp = Obj.car exp
+  and operands exp = Obj.cdr exp
   and makeApplication (operator, operands) =
-      Lisp.cons (operator, operands)
+      Obj.cons (operator, operands)
 
   (*
    * derived expressions
    *)
 
   fun seqToExp seq =
-      if Lisp.isNull seq then seq
-      else if (Lisp.isNull o Lisp.cdr) seq then
-        Lisp.car seq
+      if Obj.isNull seq then seq
+      else if (Obj.isNull o Obj.cdr) seq then
+        Obj.car seq
       else makeBegin seq
 
   val isCond = isTaggedList COND
   val expandCond =
       let
-        val condClauses = Lisp.cdr
-        val condPredicate = Lisp.car
-        val condActions = Lisp.cdr
-        val condArrowProc = Lisp.cadr
+        val condClauses = Obj.cdr
+        val condPredicate = Obj.car
+        val condActions = Obj.cdr
+        val condArrowProc = Obj.cadr
         fun isCondElseClause clause =
-            Lisp.eq (condPredicate clause, ELSE)
+            Obj.eq (condPredicate clause, ELSE)
         fun isCondArrowClause clause =
             let
               val actions = condActions clause
             in
-              if not (Lisp.isNull actions) andalso
-                 Lisp.eq (Lisp.car actions, ARROW) then
-                if (Lisp.isNull o Lisp.cdr) actions then
-                  raise Lisp.Error ("Too few actions -- expandCond: ~S",
-                                    [actions])
-                else if (not o Lisp.isNull o Lisp.cddr) actions then
-                  raise Lisp.Error ("Too many actions -- expandCond: ~S",
-                                    [actions])
+              if not (Obj.isNull actions) andalso
+                 Obj.eq (Obj.car actions, ARROW) then
+                if (Obj.isNull o Obj.cdr) actions then
+                  raise Obj.Error ("Too few actions -- expandCond: ~S",
+                                   [actions])
+                else if (not o Obj.isNull o Obj.cddr) actions then
+                  raise Obj.Error ("Too many actions -- expandCond: ~S",
+                                   [actions])
                 else
                   true
               else
@@ -1012,46 +1012,40 @@ struct
              * (cond (<test> . <actions>) . <rest>)
              * -> (if ,<test> (begin ,@<actions>) (cond ,@<rest>))
              *)
-            if Lisp.isNull clauses then
+            if Obj.isNull clauses then
               makeFalse () (* no else clause *)
             else
               let
-                val first = Lisp.car clauses
-                val rest = Lisp.cdr clauses
+                val first = Obj.car clauses
+                val rest = Obj.cdr clauses
               in
                 if isCondElseClause first then
-                  if Lisp.isNull rest then
+                  if Obj.isNull rest then
                     (seqToExp o condActions) first
                   else
-                    raise Lisp.Error ("ELSE clause isn't last" ^
-                                      " -- expandCond: ~S", [clauses])
+                    raise Obj.Error ("ELSE clause isn't last" ^
+                                     " -- expandCond: ~S", [clauses])
                 else if isCondArrowClause first then
                   let
                     val test = condPredicate first
                     val actions = condActions first
                     val proc = condArrowProc actions
-                    val thunk1 = makeLambda (Lisp.null,
-                                            Lisp.fromList [proc])
-                    val condForm = Lisp.cons (COND, rest)
-                    val thunk2 = makeLambda (Lisp.null,
-                                            Lisp.fromList [condForm])
-                    val opParam1 = Lisp.sym "V"
-                    val opParam2 = Lisp.sym "R1"
-                    val opParam3 = Lisp.sym "R2"
-                    val opParams = Lisp.fromList
-                                       [opParam1, opParam2, opParam3]
-                    val appForm1 = makeApplication (opParam2,
-                                                    Lisp.null)
-                    val appForm2 = makeApplication (opParam3,
-                                                    Lisp.null)
+                    val thunk1 = makeLambda (Obj.null, Obj.fromList [proc])
+                    val condForm = Obj.cons (COND, rest)
+                    val thunk2 = makeLambda (Obj.null, Obj.fromList [condForm])
+                    val opParam1 = Obj.sym "V"
+                    val opParam2 = Obj.sym "R1"
+                    val opParam3 = Obj.sym "R2"
+                    val opParams = Obj.fromList [opParam1, opParam2, opParam3]
+                    val appForm1 = makeApplication (opParam2, Obj.null)
+                    val appForm2 = makeApplication (opParam3, Obj.null)
                     val ifForm = makeIf (opParam1,
                                          makeApplication (appForm1,
-                                                          Lisp.fromList
+                                                          Obj.fromList
                                                               [opParam1]),
                                          appForm2)
-                    val operator = makeLambda (opParams,
-                                               Lisp.fromList [ifForm])
-                    val operands = Lisp.fromList [test, thunk1, thunk2]
+                    val operator = makeLambda (opParams, Obj.fromList [ifForm])
+                    val operands = Obj.fromList [test, thunk1, thunk2]
                   in
                     makeApplication (operator, operands)
                   end
@@ -1059,13 +1053,13 @@ struct
                   makeIf (condPredicate first,
                           (seqToExp o condActions) first,
                           (* expandClauses rest) *)
-                          Lisp.cons (COND, rest))
+                          Obj.cons (COND, rest))
               end
       in
         expandClauses o condClauses
       end
 
- (* Exercise 4.4 *)
+  (* Exercise 4.4 *)
   val isAnd = isTaggedList AND
   val expandAnd =
       let
@@ -1078,39 +1072,36 @@ struct
              *       ,<x>
              *       (lambda () (and ,@<rest>)))
              *)
-            if Lisp.isNull clauses then
+            if Obj.isNull clauses then
               makeTrue ()
             else
               let
-                val first = Lisp.car clauses
-                val rest = Lisp.cdr clauses
+                val first = Obj.car clauses
+                val rest = Obj.cdr clauses
               in
-                if Lisp.isNull rest then
+                if Obj.isNull rest then
                   first
                 else
                   let
-                    val andForm = Lisp.cons (AND, rest)
-                    val thunk = makeLambda (Lisp.null,
-                                            Lisp.fromList [andForm])
-                    val opParam1 = Lisp.sym "V"
-                    val opParam2 = Lisp.sym "R"
-                    val opParams = Lisp.fromList [opParam1, opParam2]
+                    val andForm = Obj.cons (AND, rest)
+                    val thunk = makeLambda (Obj.null, Obj.fromList [andForm])
+                    val opParam1 = Obj.sym "V"
+                    val opParam2 = Obj.sym "R"
+                    val opParams = Obj.fromList [opParam1, opParam2]
                     val ifForm = makeIf (opParam1,
-                                         makeApplication (opParam2,
-                                                          Lisp.null),
+                                         makeApplication (opParam2, Obj.null),
                                          makeFalse ())
-                    val operator = makeLambda (opParams,
-                                               Lisp.fromList [ifForm])
-                    val operands = Lisp.fromList [first, thunk]
+                    val operator = makeLambda (opParams, Obj.fromList [ifForm])
+                    val operands = Obj.fromList [first, thunk]
                   in
                     makeApplication (operator, operands)
                   end
               end
       in
-        expandClauses o Lisp.cdr
+        expandClauses o Obj.cdr
       end
 
- (* Exercise 4.4 *)
+  (* Exercise 4.4 *)
   val isOr = isTaggedList OR
   val expandOr =
       let
@@ -1122,31 +1113,28 @@ struct
              *      ,<x>
              *      (lambda () (or ,@<rest>)))
              *)
-            if Lisp.isNull clauses then
+            if Obj.isNull clauses then
               makeFalse ()
             else
               let
-                val first = Lisp.car clauses
-                val rest = Lisp.cdr clauses
+                val first = Obj.car clauses
+                val rest = Obj.cdr clauses
 
-                val orForm = Lisp.cons (OR, rest)
-                val thunk = makeLambda (Lisp.null,
-                                        Lisp.fromList [orForm])
-                val opParam1 = Lisp.sym "V"
-                val opParam2 = Lisp.sym "R"
-                val opParams = Lisp.fromList [opParam1, opParam2]
+                val orForm = Obj.cons (OR, rest)
+                val thunk = makeLambda (Obj.null, Obj.fromList [orForm])
+                val opParam1 = Obj.sym "V"
+                val opParam2 = Obj.sym "R"
+                val opParams = Obj.fromList [opParam1, opParam2]
                 val ifForm = makeIf (opParam1,
                                      opParam1,
-                                     makeApplication (opParam2,
-                                                      Lisp.null))
-                val operator = makeLambda (opParams,
-                                           Lisp.fromList [ifForm])
-                val operands = Lisp.fromList [first, thunk]
+                                     makeApplication (opParam2, Obj.null))
+                val operator = makeLambda (opParams, Obj.fromList [ifForm])
+                val operands = Obj.fromList [first, thunk]
               in
                 makeApplication (operator, operands)
               end
       in
-        expandClauses o Lisp.cdr
+        expandClauses o Obj.cdr
       end
 
   (* Exercise 4.6 *)
@@ -1155,15 +1143,15 @@ struct
       let
         fun expandClauses clauses =
             let
-              val car = Lisp.car clauses
+              val car = Obj.car clauses
             in
-              if Lisp.isNull car orelse Lisp.isCons car then
+              if Obj.isNull car orelse Obj.isCons car then
                 expandClausesForOrdinaryLet clauses
-              else if Lisp.isSym car then
+              else if Obj.isSym car then
                 expandClausesForNamedLet clauses
               else
-                raise Lisp.Error ("Unexpected form -- expandLet: ~S",
-                                  [car, clauses])
+                raise Obj.Error ("Unexpected form -- expandLet: ~S",
+                                 [car, clauses])
             end
         and expandClausesForOrdinaryLet clauses =
             (*
@@ -1172,11 +1160,11 @@ struct
              *     ,@(MAP CADR <params>))
              *)
             let
-              val params = Lisp.car clauses
-              val body = Lisp.cdr clauses
+              val params = Obj.car clauses
+              val body = Obj.cdr clauses
 
-              val operator = makeLambda (Lisp.map Lisp.car params, body)
-              val operands = Lisp.map Lisp.cadr params
+              val operator = makeLambda (Obj.map Obj.car params, body)
+              val operands = Obj.map Obj.cadr params
             in
               makeApplication (operator, operands)
             end
@@ -1189,21 +1177,21 @@ struct
              *     (,<name> ,@(MAP CADR <params>))))
              *)
             let
-              val name = Lisp.car clauses
-              val params = Lisp.cadr clauses
-              val body = Lisp.cddr clauses
+              val name = Obj.car clauses
+              val params = Obj.cadr clauses
+              val body = Obj.cddr clauses
 
-              val letParam = Lisp.fromList [name, makeTrue ()]
-              val letParams = Lisp.fromList [letParam]
-              val operator = makeLambda (Lisp.map Lisp.car params, body)
-              val operands = Lisp.map Lisp.cadr params
+              val letParam = Obj.fromList [name, makeTrue ()]
+              val letParams = Obj.fromList [letParam]
+              val operator = makeLambda (Obj.map Obj.car params, body)
+              val operands = Obj.map Obj.cadr params
               val assignForm = makeAssign (name, operator)
               val appForm = makeApplication (name, operands)
             in
-              Lisp.fromList [LET, letParams, assignForm, appForm]
+              Obj.fromList [LET, letParams, assignForm, appForm]
             end
       in
-        expandClauses o Lisp.cdr
+        expandClauses o Obj.cdr
       end
 
   (* Exercise 4.7 *)
@@ -1217,25 +1205,24 @@ struct
              * -> (let ,(CAR <params>) (let* ,(CDR <params>) ,@<body>))
              *)
             let
-              val params = Lisp.car clauses
-              val body = Lisp.cdr clauses
+              val params = Obj.car clauses
+              val body = Obj.cdr clauses
             in
-              if Lisp.isNull params then
-                Lisp.cons (LET,
-                           Lisp.cons (params, body))
+              if Obj.isNull params then
+                Obj.cons (LET,
+                          Obj.cons (params, body))
               else
                 let
-                  val firstParam = Lisp.car params
-                  val restParams = Lisp.cdr params
-                  val letParams = Lisp.fromList [firstParam]
-                  val let2Form = Lisp.cons (LET2,
-                                            Lisp.cons (restParams, body))
+                  val firstParam = Obj.car params
+                  val restParams = Obj.cdr params
+                  val letParams = Obj.fromList [firstParam]
+                  val let2Form = Obj.cons (LET2, Obj.cons (restParams, body))
                 in
-                  Lisp.fromList [LET, letParams, let2Form]
+                  Obj.fromList [LET, letParams, let2Form]
                 end
             end
       in
-        expandClauses o Lisp.cdr
+        expandClauses o Obj.cdr
       end
 
   (* Exercise 4.20 *)
@@ -1256,29 +1243,29 @@ struct
              *      <e3>)
              *)
             let
-              val params = Lisp.car clauses
-              val body = Lisp.cdr clauses
+              val params = Obj.car clauses
+              val body = Obj.cdr clauses
 
               fun toInit exp =
                   let
-                    val var = Lisp.car exp
+                    val var = Obj.car exp
                   in
-                    Lisp.fromList [var, makeQuote Lisp.undef]
+                    Obj.fromList [var, makeQuote Obj.undef]
                   end
               fun toAssign exp =
                   let
-                    val var = Lisp.car exp
-                    val value = Lisp.cadr exp
+                    val var = Obj.car exp
+                    val value = Obj.cadr exp
                   in
                     makeAssign (var, value)
                   end
-              val letParams = Lisp.map toInit params
-              val letBody = Lisp.append (Lisp.map toAssign params, body)
+              val letParams = Obj.map toInit params
+              val letBody = Obj.append (Obj.map toAssign params, body)
             in
-              Lisp.cons (LET, Lisp.cons (letParams, letBody))
+              Obj.cons (LET, Obj.cons (letParams, letBody))
             end
       in
-        expandClauses o Lisp.cdr
+        expandClauses o Obj.cdr
       end
 
   fun isDerived exp =
@@ -1296,48 +1283,48 @@ struct
       else if isLet exp then expandLet exp
       else if isLet2 exp then expandLet2 exp
       else if isLetrec exp then expandLetrec exp
-      else raise Lisp.Error ("Unsupported derived expression: ~S", [exp])
+      else raise Obj.Error ("Unsupported derived expression: ~S", [exp])
 
   (* for amb evaluator: used in chap4_3.sml *)
   fun isAmb exp = isTaggedList AMB exp
-  fun ambChoices exp = Lisp.cdr exp
+  fun ambChoices exp = Obj.cdr exp
 end;
 
 (* 4.1.3  Evaluator Data Structures *)
 
-functor LispFn (structure Env: ENV) :> LISP =
+functor LispObjectFn (structure Env: ENV) :> LISP_OBJECT =
 struct
-  datatype obj = Undef
-               | Eof
-               | Nil
-               | Cons of obj ref * obj ref
-               | Sym of string
-               | Bool of bool
-               | Num of num
-               | Str of string
-               | Subr of int * string * proc
-               | Expr of int * obj * obj * obj
-               | InputStream of int * TextIO.instream
-               | OutputStream of int * TextIO.outstream
-               | Environment of int * (obj, obj) Env.t
-               | Thunk of int * thunk ref
+  datatype t = Undef
+             | Eof
+             | Nil
+             | Cons of t ref * t ref
+             | Sym of string
+             | Bool of bool
+             | Num of num
+             | Str of string
+             | Subr of int * string * proc
+             | Expr of int * t * t * t
+             | InputStream of int * TextIO.instream
+             | OutputStream of int * TextIO.outstream
+             | Environment of int * (t, t) Env.t
+             | Thunk of int * thunk ref
 
        and num = Int of int
                | Real of real
 
-       and proc = Proc0 of unit -> obj
-                | Proc1 of obj -> obj
-                | Proc2 of obj * obj -> obj
-                | Proc3 of obj * obj * obj -> obj
-                | Proc0R of obj list -> obj
-                | Proc1R of obj * obj list -> obj
-                | Proc2R of obj * obj * obj list -> obj
-                | Proc3R of obj * obj * obj * obj list -> obj
+       and proc = Proc0 of unit -> t
+                | Proc1 of t -> t
+                | Proc2 of t * t -> t
+                | Proc3 of t * t * t -> t
+                | Proc0R of t list -> t
+                | Proc1R of t * t list -> t
+                | Proc2R of t * t * t list -> t
+                | Proc3R of t * t * t * t list -> t
 
-       and thunk = NotEvaluated of obj * obj
-                 | Evaluated of obj
+       and thunk = NotEvaluated of t * t
+                 | Evaluated of t
 
-  exception Error of string * obj list
+  exception Error of string * t list
 
   val counter = ref 0 (* counter for obj-id *)
 
@@ -1355,8 +1342,8 @@ struct
   val undef = Undef
   val eof = Eof
   val null = Nil
-  val t = Bool true
-  val f = Bool false
+  val T = Bool true
+  val F = Bool false
   val zero = Num (Int 0)
   val one = Num (Int 1)
   val stdIn = InputStream (inc (), TextIO.stdIn)
@@ -1418,8 +1405,8 @@ struct
   (* constructors *)
   fun cons (h, t) = Cons (ref h, ref t)
   and sym s = Sym s
-  and bool true = t
-    | bool false = f
+  and bool true = T
+    | bool false = F
   and int 0 = zero
     | int 1 = one
     | int i = Num (Int i)
@@ -1557,7 +1544,7 @@ struct
   fun toBool (Bool b) = b
     | toBool obj = typeError (t_bool, obj)
   fun not obj =
-      if isTrue obj then f else t
+      if isTrue obj then F else T
 
   (* for num *)
   fun isInt (Num n) =
@@ -2026,7 +2013,26 @@ end;
 
 (* 4.1.4  Running the Evaluator as a Program *)
 
-signature LISP_INTERPRETER =
+signature LISP =
+sig
+structure Obj : LISP_OBJECT
+      and Syntax : LISP_SYNTAX
+      and Reader : LISP_READER
+      and Printer : LISP_PRINTER
+      and Evaluator : LISP_EVALUATOR
+sharing type Syntax.obj = Obj.t
+    and type Reader.obj = Obj.t
+    and type Printer.obj = Obj.t
+    and type Evaluator.obj = Obj.t
+end;
+
+signature LISP_RUNTIME =
+sig
+  include LISP
+  val setupEnv : unit -> Obj.t
+end;
+
+signature INTERPRETER =
 sig
   (* exception raised when unit test is failed *)
   exception Test
@@ -2040,209 +2046,211 @@ sig
   val onError : exn * (unit -> 'a) -> 'a
 end;
 
-functor LispInterpreterFn (structure Lisp : LISP
-                           and Syntax : LISP_SYNTAX
-                           and Reader : LISP_READER
-                           and Printer : LISP_PRINTER
-                           and Evaluator : LISP_EVALUATOR
-                           sharing type Syntax.obj = Lisp.obj
-                           and type Reader.obj = Lisp.obj
-                           and type Printer.obj = Lisp.obj
-                           and type Evaluator.obj = Lisp.obj)
-        : LISP_INTERPRETER =
+functor LispRuntimeFn (Lisp : LISP) : LISP_RUNTIME =
 struct
-  exception Test
+  open Lisp
 
-  val stdIn = Lisp.stdIn
-  val stdOut = Lisp.stdOut
-  val stdErr = Lisp.stdErr
-  val quit = Lisp.sym ":q"
   val subrs =
-      [Lisp.subr2 ("cons", Lisp.cons),
-       Lisp.subr1 ("car", Lisp.car),
-       Lisp.subr1 ("cdr", Lisp.cdr),
-       Lisp.subr1 ("caar", Lisp.caar),
-       Lisp.subr1 ("cadr", Lisp.cadr),
-       Lisp.subr1 ("cdar", Lisp.cdar),
-       Lisp.subr1 ("cddr", Lisp.cddr),
-       Lisp.subr1 ("caaar", Lisp.caaar),
-       Lisp.subr1 ("caadr", Lisp.caadr),
-       Lisp.subr1 ("cadar", Lisp.cadar),
-       Lisp.subr1 ("cdaar", Lisp.cdaar),
-       Lisp.subr1 ("caddr", Lisp.caddr),
-       Lisp.subr1 ("cdadr", Lisp.cdadr),
-       Lisp.subr1 ("cddar", Lisp.cddar),
-       Lisp.subr1 ("cdddr", Lisp.cdddr),
-       Lisp.subr2 ("set-car!",
-                   (fn (lst,obj) => Lisp.setCar lst obj)),
-       Lisp.subr2 ("set-cdr!",
-                   (fn (lst,obj) => Lisp.setCdr lst obj)),
-       Lisp.subr0R ("list", Lisp.fromList),
-       Lisp.subr1 ("length",
-                   (fn lst =>
-                       let
-                         fun len l =
-                             if Lisp.isNull l then 0
-                             else 1 + (len (Lisp.cdr l))
-                       in
-                         Lisp.int (len lst)
-                       end)),
-       Lisp.subr2 ("nth",
-                   (fn (lst,n) =>
-                       let
-                         fun error () =
-                             raise Lisp.Error
-                                       ("Subscript out of bounds", nil)
-                         fun iter (l, i) =
-                             if Lisp.isNull l then
-                               error ()
-                             else
-                               if i = 0 then
-                                 Lisp.car l
-                               else
-                                 iter (Lisp.cdr l, i - 1)
-                         val i = Lisp.toInt n
-                       in
-                         if i < 0 then error ()
-                         else iter (lst, i)
-                       end)),
-       Lisp.subr2 ("assoc",
-                   (fn (key,lst) =>
-                       let
-                         fun iter (k,l) =
-                             if Lisp.isNull l then
-                               Lisp.f
-                             else
-                               let
-                                 val p = Lisp.car l
-                                 val k' = Lisp.car p
-                               in
-                                 if Lisp.equal (k,k') then p
-                                 else iter (k, Lisp.cdr l)
-                               end
-                       in
-                         iter (key, lst)
-                       end)),
-       Lisp.subr2R ("map",
-                    (fn (p,lst,lsts) =>
-                        let
-                          fun isEnd nil = false
-                            | isEnd (l::ll) =
-                              if Lisp.isNull l then true
-                              else isEnd ll
-                          fun first nil = nil
-                            | first (l::ll) = (Lisp.car l)::(first ll)
-                          fun rest nil = nil
-                            | rest (l::ll) = (Lisp.cdr l)::(rest ll)
-                          fun map ll =
-                              if isEnd ll then Lisp.null
+      [Obj.subr2 ("cons", Obj.cons),
+       Obj.subr1 ("car", Obj.car),
+       Obj.subr1 ("cdr", Obj.cdr),
+       Obj.subr1 ("caar", Obj.caar),
+       Obj.subr1 ("cadr", Obj.cadr),
+       Obj.subr1 ("cdar", Obj.cdar),
+       Obj.subr1 ("cddr", Obj.cddr),
+       Obj.subr1 ("caaar", Obj.caaar),
+       Obj.subr1 ("caadr", Obj.caadr),
+       Obj.subr1 ("cadar", Obj.cadar),
+       Obj.subr1 ("cdaar", Obj.cdaar),
+       Obj.subr1 ("caddr", Obj.caddr),
+       Obj.subr1 ("cdadr", Obj.cdadr),
+       Obj.subr1 ("cddar", Obj.cddar),
+       Obj.subr1 ("cdddr", Obj.cdddr),
+       Obj.subr2 ("set-car!",
+                  (fn (lst,obj) => Obj.setCar lst obj)),
+       Obj.subr2 ("set-cdr!",
+                  (fn (lst,obj) => Obj.setCdr lst obj)),
+       Obj.subr0R ("list", Obj.fromList),
+       Obj.subr1 ("length",
+                  (fn lst =>
+                      let
+                        fun len l =
+                            if Obj.isNull l then 0
+                            else 1 + (len (Obj.cdr l))
+                      in
+                        Obj.int (len lst)
+                      end)),
+       Obj.subr2 ("nth",
+                  (fn (lst,n) =>
+                      let
+                        fun error () =
+                            raise Obj.Error
+                                      ("Subscript out of bounds", nil)
+                        fun iter (l, i) =
+                            if Obj.isNull l then
+                              error ()
+                            else
+                              if i = 0 then
+                                Obj.car l
                               else
-                                Lisp.cons (Evaluator.apply p (first ll),
-                                           map (rest ll))
-                        in
-                          map (lst::lsts)
-                        end)),
-       Lisp.subr2 ("eq?", Lisp.bool o Lisp.eq),
-       Lisp.subr2 ("equal?", Lisp.bool o Lisp.equal),
-       Lisp.subr1 ("null?", Lisp.bool o Lisp.isNull),
-       Lisp.subr1 ("true?", Lisp.bool o Lisp.isTrue),
-       Lisp.subr1 ("false?", Lisp.bool o Lisp.isFalse),
-       Lisp.subr1 ("pair?", Lisp.bool o Lisp.isCons),
-       Lisp.subr1 ("symbol?", Lisp.bool o Lisp.isSym),
-       Lisp.subr1 ("bool?", Lisp.bool o Lisp.isBool),
-       Lisp.subr1 ("number?", Lisp.bool o Lisp.isNum),
-       Lisp.subr1 ("string?", Lisp.bool o Lisp.isStr),
-       Lisp.subr1 ("subr?", Lisp.bool o Lisp.isSubr),
-       Lisp.subr1 ("expr?", Lisp.bool o Lisp.isExpr),
-       Lisp.subr1 ("input-stream?", Lisp.bool o Lisp.isInputStream),
-       Lisp.subr1 ("output-stream?", Lisp.bool o Lisp.isOutputStream),
-       Lisp.subr0R ("+",
-                    (fn ns =>
-                        let
-                          fun f (a, b) = Lisp.addNum (b, a)
-                        in
-                          (*
-                           * foldl f i [i0,i1,...,iN]; where f(a,b) = b+a
-                           * = f(iN,...,f(i1,f(i0,i)))
-                           * = (((i+i0)+i1)+...+iN)
-                           *)
-                          List.foldl f Lisp.zero ns
-                        end)),
-       Lisp.subr0R ("-",
-                    (fn nil => Lisp.zero
-                      | (n::nil) => Lisp.negNum n
-                      | (n::ns) =>
-                        let
-                          fun f (a, b) = Lisp.subNum (b, a)
-                        in
-                          (*
-                           * foldl f i [i0,i1,...,iN]; where f(a,b) = b-a
-                           * = f(iN,...,f(i1,f(i0,i)))
-                           * = (((i-i0)-i1)-...-iN)
-                           *)
-                          List.foldl f n ns
-                        end)),
-       Lisp.subr0R ("*",
-                    (fn ns =>
-                        let
-                          fun f (a, b) = Lisp.mulNum (b, a)
-                        in
-                          (*
-                           * foldl f i [i0,i1,...,iN]; where f(a,b) = b*a
-                           * = f(iN,...,f(i1,f(i0,i)))
-                           * = (((i*i0)*i1)*...*iN)
-                           *)
-                          List.foldl f Lisp.one ns
-                        end)),
-       Lisp.subr2 ("/", Lisp.quoNum),
-       Lisp.subr2 ("%", Lisp.remNum),
-       Lisp.subr2 ("=", Lisp.bool o Lisp.eqNum),
-       Lisp.subr2 (">", Lisp.bool o Lisp.gtNum),
-       Lisp.subr2 ("<", Lisp.bool o Lisp.ltNum),
-       Lisp.subr2 (">=", Lisp.bool o Lisp.geNum),
-       Lisp.subr2 ("<=", Lisp.bool o Lisp.leNum),
-       Lisp.subr1 ("not", Lisp.not),
-       Lisp.subr0 ("read", fn () => Reader.read stdIn),
-       Lisp.subr1 ("print",
-                   (fn obj => Printer.print (stdOut, obj))),
-       Lisp.subr1 ("print-string",
-                   (fn obj =>
-                       Printer.printString (stdOut, Lisp.toString obj))),
-       Lisp.subr0 ("terpri",
-                   (fn () => Printer.terpri stdOut)),
-       Lisp.subr0 ("flush",
-                   (fn () => Printer.flush stdOut)),
-       Lisp.subr1R ("format",
-                    (fn (fmt,args) =>
-                        Printer.format (stdOut, Lisp.toString fmt, args))),
-       Lisp.subr2 ("eval",
-                   (fn (exp, env) =>
-                       Evaluator.eval exp env)),
-       Lisp.subr2 ("apply",
-                   (fn (proc, args) =>
-                       Evaluator.apply proc (Lisp.toList args))),
-       Lisp.subr1 ("expand-syntax",
-                   (fn exp =>
-                       if Syntax.isDerived exp then
-                         Syntax.expandDerived exp
-                       else
-                         exp)),
-       Lisp.subr1R ("error",
-                    (fn (fmt,args) =>
-                        raise Lisp.Error (Lisp.toString fmt, args)))]
+                                iter (Obj.cdr l, i - 1)
+                        val i = Obj.toInt n
+                      in
+                        if i < 0 then error ()
+                        else iter (lst, i)
+                      end)),
+       Obj.subr2 ("assoc",
+                  (fn (key,lst) =>
+                      let
+                        fun iter (k,l) =
+                            if Obj.isNull l then
+                              Obj.F
+                            else
+                              let
+                                val p = Obj.car l
+                                val k' = Obj.car p
+                              in
+                                if Obj.equal (k,k') then p
+                                else iter (k, Obj.cdr l)
+                              end
+                      in
+                        iter (key, lst)
+                      end)),
+       Obj.subr2R ("map",
+                   (fn (p,lst,lsts) =>
+                       let
+                         fun isEnd nil = false
+                           | isEnd (l::ll) =
+                             if Obj.isNull l then true
+                             else isEnd ll
+                         fun first nil = nil
+                           | first (l::ll) = (Obj.car l)::(first ll)
+                         fun rest nil = nil
+                           | rest (l::ll) = (Obj.cdr l)::(rest ll)
+                         fun map ll =
+                             if isEnd ll then Obj.null
+                             else
+                               Obj.cons (Evaluator.apply p (first ll),
+                                         map (rest ll))
+                       in
+                         map (lst::lsts)
+                       end)),
+       Obj.subr2 ("eq?", Obj.bool o Obj.eq),
+       Obj.subr2 ("equal?", Obj.bool o Obj.equal),
+       Obj.subr1 ("null?", Obj.bool o Obj.isNull),
+       Obj.subr1 ("true?", Obj.bool o Obj.isTrue),
+       Obj.subr1 ("false?", Obj.bool o Obj.isFalse),
+       Obj.subr1 ("pair?", Obj.bool o Obj.isCons),
+       Obj.subr1 ("symbol?", Obj.bool o Obj.isSym),
+       Obj.subr1 ("bool?", Obj.bool o Obj.isBool),
+       Obj.subr1 ("number?", Obj.bool o Obj.isNum),
+       Obj.subr1 ("string?", Obj.bool o Obj.isStr),
+       Obj.subr1 ("subr?", Obj.bool o Obj.isSubr),
+       Obj.subr1 ("expr?", Obj.bool o Obj.isExpr),
+       Obj.subr1 ("input-stream?", Obj.bool o Obj.isInputStream),
+       Obj.subr1 ("output-stream?", Obj.bool o Obj.isOutputStream),
+       Obj.subr0R ("+",
+                   (fn ns =>
+                       let
+                         fun f (a, b) = Obj.addNum (b, a)
+                       in
+                         (*
+                          * foldl f i [i0,i1,...,iN]; where f(a,b) = b+a
+                          * = f(iN,...,f(i1,f(i0,i)))
+                          * = (((i+i0)+i1)+...+iN)
+                          *)
+                         List.foldl f Obj.zero ns
+                       end)),
+       Obj.subr0R ("-",
+                   (fn nil => Obj.zero
+                     | (n::nil) => Obj.negNum n
+                     | (n::ns) =>
+                       let
+                         fun f (a, b) = Obj.subNum (b, a)
+                       in
+                         (*
+                          * foldl f i [i0,i1,...,iN]; where f(a,b) = b-a
+                          * = f(iN,...,f(i1,f(i0,i)))
+                          * = (((i-i0)-i1)-...-iN)
+                          *)
+                         List.foldl f n ns
+                       end)),
+       Obj.subr0R ("*",
+                   (fn ns =>
+                       let
+                         fun f (a, b) = Obj.mulNum (b, a)
+                       in
+                         (*
+                          * foldl f i [i0,i1,...,iN]; where f(a,b) = b*a
+                          * = f(iN,...,f(i1,f(i0,i)))
+                          * = (((i*i0)*i1)*...*iN)
+                          *)
+                         List.foldl f Obj.one ns
+                       end)),
+       Obj.subr2 ("/", Obj.quoNum),
+       Obj.subr2 ("%", Obj.remNum),
+       Obj.subr2 ("=", Obj.bool o Obj.eqNum),
+       Obj.subr2 (">", Obj.bool o Obj.gtNum),
+       Obj.subr2 ("<", Obj.bool o Obj.ltNum),
+       Obj.subr2 (">=", Obj.bool o Obj.geNum),
+       Obj.subr2 ("<=", Obj.bool o Obj.leNum),
+       (* prime: => included in chap1_2.sml: used in chap4_3.sml *)
+       Obj.subr1 ("prime?", Obj.bool o prime o Obj.toInt),
+       Obj.subr1 ("not", Obj.not),
+       Obj.subr0 ("read", fn () => Reader.read Obj.stdIn),
+       Obj.subr1 ("print",
+                  (fn obj => Printer.print (Obj.stdOut, obj))),
+       Obj.subr1 ("print-string",
+                  (fn obj =>
+                      Printer.printString (Obj.stdOut, Obj.toString obj))),
+       Obj.subr0 ("terpri",
+                  (fn () => Printer.terpri Obj.stdOut)),
+       Obj.subr0 ("flush",
+                  (fn () => Printer.flush Obj.stdOut)),
+       Obj.subr1R ("format",
+                   (fn (fmt,args) =>
+                       Printer.format (Obj.stdOut, Obj.toString fmt, args))),
+       Obj.subr2 ("eval",
+                  (fn (exp,env) =>
+                      Evaluator.eval exp env)),
+       Obj.subr2 ("apply",
+                  (fn (proc,args) =>
+                      Evaluator.apply proc (Obj.toList args))),
+       Obj.subr1 ("expand-syntax",
+                  (fn exp =>
+                      if Syntax.isDerived exp then
+                        Syntax.expandDerived exp
+                      else
+                        exp)),
+       Obj.subr1R ("error",
+                   (fn (fmt,args) =>
+                       raise Obj.Error (Obj.toString fmt, args)))]
 
   fun setupEnv () =
       let
-        val subrName = Lisp.sym o Lisp.subrName
-        val env = Lisp.extendEnv (Lisp.newEnv ())
-                                 (map subrName subrs, subrs)
-        val userInitEnv = Lisp.subr0 ("user-init-env", fn () => env)
+        val subrName = Obj.sym o Obj.subrName
+        val env = Obj.extendEnv (Obj.newEnv ())
+                                (map subrName subrs, subrs)
+        val userInitEnv = Obj.subr0 ("user-init-env", fn () => env)
       in
-        Lisp.defineEnv env (Syntax.TRUE, Lisp.t);
-        Lisp.defineEnv env (Syntax.FALSE, Lisp.f);
-        Lisp.defineEnv env (subrName userInitEnv, userInitEnv);
+        Obj.defineEnv env (Syntax.TRUE, Obj.T);
+        Obj.defineEnv env (Syntax.FALSE, Obj.F);
+        Obj.defineEnv env (subrName userInitEnv, userInitEnv);
         env
       end
+end;
+
+functor LispInterpreterFn (Runtime : LISP_RUNTIME)
+        : INTERPRETER =
+struct
+  open Runtime
+
+  exception Test
+
+  val stdIn = Obj.stdIn
+  val stdOut = Obj.stdOut
+  val stdErr = Obj.stdErr
+  val quit = Obj.sym ":q"
 
   fun hello () =
       ignore (Printer.format (stdOut, "Hello!~%"^
@@ -2252,7 +2260,7 @@ struct
   fun bye () =
       ignore (Printer.format (stdOut, "Bye!~%", nil))
 
-  fun onError (Lisp.Error (ctrlstr,args), cont) =
+  fun onError (Obj.Error (ctrlstr,args), cont) =
       let
         val msg = "Runtime error: " ^ ctrlstr ^ "~%"
       in
@@ -2277,7 +2285,7 @@ struct
               val obj = (Printer.format (stdOut, "~%> ", nil);
                          Reader.read stdIn)
             in
-              if Lisp.isEof obj orelse Lisp.eq (obj, quit) then
+              if Obj.isEof obj orelse Obj.eq (obj, quit) then
                 ()
               else
                 let
@@ -2299,11 +2307,11 @@ struct
         val counter = ref 1
         fun inc () = let val n = !counter in counter := n+1; n end
         val env = setupEnv ()
-        val s2i = Lisp.inputStream o TextIO.openString
+        val s2i = Obj.inputStream o TextIO.openString
       in
         (fn (input, expected) =>
             let
-              val n = Lisp.int (inc ())
+              val n = Obj.int (inc ())
               val is = s2i input
               val is' = s2i expected
               val obj = Reader.read is
@@ -2311,7 +2319,7 @@ struct
               val ret = Evaluator.eval obj env
               val ret' = Evaluator.eval obj' env
             in
-              if Lisp.equal (ret, ret') then
+              if Obj.equal (ret, ret') then
                 (Printer.format (stdOut,
                                  "[~S] OK: ~S -> ~S~%",
                                  [n, obj, ret]);
@@ -2441,22 +2449,26 @@ struct
 end;
 
 local
-  structure E = Env
-  (*
-  structure E = Env' (* Exercise 4.11 *)
-  structure E = Env'' (* Exercise 4.12 *)
-   *)
-  structure L = LispFn (structure Env = E)
-  structure LS = LispSyntaxFn (structure Lisp = L)
-  structure LR = LispReaderFn (structure Lisp = L and Syntax = LS)
-  structure LP = LispPrinterFn (structure Lisp = L and Syntax = LS)
-  structure LE = LispEvaluatorFn (structure Lisp = L and Syntax = LS)
+  structure Lisp : LISP =
+  struct
+    structure Obj
+      = LispObjectFn (structure Env = Env)
+    (*
+      = LispObjectFn (structure Env = Env') (* Exercise 4.11 *)
+      = LispObjectFn (structure Env = Env'') (* Exercise 4.12 *)
+     *)
+    structure Syntax
+      = LispSyntaxFn (structure Obj = Obj)
+    structure Reader
+      = LispReaderFn (structure Obj = Obj and Syntax = Syntax)
+    structure Printer
+      = LispPrinterFn (structure Obj = Obj and Syntax = Syntax)
+    structure Evaluator
+      = LispEvaluatorFn (structure Obj = Obj and Syntax = Syntax)
+  end
+  structure Runtime = LispRuntimeFn (Lisp)
 in
-structure LI = LispInterpreterFn (structure Lisp = L
-                                  and Syntax = LS
-                                  and Reader = LR
-                                  and Printer = LP
-                                  and Evaluator = LE)
+structure LI = LispInterpreterFn (Runtime)
 end;
 
 (*
@@ -2475,12 +2487,12 @@ end;
 
 (* 4.1.7  Separating Syntactic Analysis from Execution *)
 
-functor LispEvaluatorFn' (structure Lisp: LISP
+functor LispEvaluatorFn' (structure Obj: LISP_OBJECT
                           and Syntax: LISP_SYNTAX
-                          sharing type Syntax.obj = Lisp.obj)
+                          sharing type Syntax.obj = Obj.t)
         : LISP_EVALUATOR =
 struct
-  type obj = Lisp.obj
+  type obj = Obj.t
 
   fun analyze exp : obj -> obj =
       if Syntax.isSelfEvaluating exp then
@@ -2504,14 +2516,14 @@ struct
       else if Syntax.isApplication exp then
         analyzeApplication exp
       else
-        raise Lisp.Error ("Unknown expression type -- analyze: ~S",
+        raise Obj.Error ("Unknown expression type -- analyze: ~S",
                           [exp])
 
   and analyzeSelfEvaluating exp =
       (fn _ => exp)
 
   and analyzeVariable exp =
-      (fn env => Lisp.lookupEnv env exp)
+      (fn env => Obj.lookupEnv env exp)
 
   and analyzeQuoted exp =
       let
@@ -2525,7 +2537,7 @@ struct
         val var = Syntax.assignmentVariable exp
         val vproc = analyze (Syntax.assignmentValue exp)
       in
-        (fn env => (Lisp.setEnv env (var, vproc env); var))
+        (fn env => (Obj.setEnv env (var, vproc env); var))
       end
 
   and analyzeDefinition exp =
@@ -2533,7 +2545,7 @@ struct
         val var = Syntax.definitionVariable exp
         val vproc = analyze (Syntax.definitionValue exp)
       in
-        (fn env => (Lisp.defineEnv env (var, vproc env); var))
+        (fn env => (Obj.defineEnv env (var, vproc env); var))
       end
 
   and analyzeIf exp =
@@ -2543,7 +2555,7 @@ struct
         val aproc = analyze (Syntax.ifAlternative exp)
       in
         (fn env =>
-            if Lisp.isTrue (pproc env) then cproc env
+            if Obj.isTrue (pproc env) then cproc env
             else aproc env)
       end
 
@@ -2553,7 +2565,7 @@ struct
         val proc = analyzeSequence (Syntax.lambdaBody exp)
         val body = toBody proc
       in
-        (fn env => Lisp.expr (vars, body, env))
+        (fn env => Obj.expr (vars, body, env))
       end
 
   and analyzeSequence exps =
@@ -2566,7 +2578,7 @@ struct
             loop (sequentially (first, second), rest)
       in
         case toProcs exps of
-          nil => raise Lisp.Error ("Empty sequence -- analyzeSequence",
+          nil => raise Obj.Error ("Empty sequence -- analyzeSequence",
                                    nil)
         | (p::ps) => loop (p, ps)
       end
@@ -2581,32 +2593,32 @@ struct
       end
 
   and executeApplication proc args =
-      if Lisp.isSubr proc then
-        Lisp.applySubr proc args
-      else if Lisp.isExpr proc then
+      if Obj.isSubr proc then
+        Obj.applySubr proc args
+      else if Obj.isExpr proc then
         let
           (* params *)
-          val params = Lisp.toList (Lisp.exprParams proc)
+          val params = Obj.toList (Obj.exprParams proc)
           (* body: represented as procedure (env -> obj) *)
-          val body = Lisp.exprBody proc
+          val body = Obj.exprBody proc
           (* env: environment to which body is applied *)
-          val env = Lisp.extendEnv (Lisp.exprEnv proc) (params, args)
+          val env = Obj.extendEnv (Obj.exprEnv proc) (params, args)
         in
-          Lisp.applySubr body [env]
+          Obj.applySubr body [env]
         end
       else
-        raise Lisp.Error ("Not a procedure -- executeApplication: ~S",
+        raise Obj.Error ("Not a procedure -- executeApplication: ~S",
                           [proc])
 
-  and toBody p = Lisp.subr1 ("body", p)
+  and toBody p = Obj.subr1 ("body", p)
 
   and toProcs exps =
-      if Lisp.isNull exps then
+      if Obj.isNull exps then
         nil
-      else if Lisp.isCons exps then
-        (analyze (Lisp.car exps)) :: (toProcs (Lisp.cdr exps))
+      else if Obj.isCons exps then
+        (analyze (Obj.car exps)) :: (toProcs (Obj.cdr exps))
       else
-        raise Lisp.Error ("Improper sequence: ~S", [exps])
+        raise Obj.Error ("Improper sequence: ~S", [exps])
 
   (* declared in LISP_EVALUATOR signature *)
   val eval = analyze
@@ -2616,18 +2628,22 @@ struct
 end;
 
 local
-  structure E = Env
-  structure L = LispFn (structure Env = E)
-  structure LS = LispSyntaxFn (structure Lisp = L)
-  structure LR = LispReaderFn (structure Lisp = L and Syntax = LS)
-  structure LP = LispPrinterFn (structure Lisp = L and Syntax = LS)
-  structure LE = LispEvaluatorFn' (structure Lisp = L and Syntax = LS)
+  structure Lisp : LISP =
+  struct
+    structure Obj
+      = LispObjectFn (structure Env = Env)
+    structure Syntax
+      = LispSyntaxFn (structure Obj = Obj)
+    structure Reader
+      = LispReaderFn (structure Obj = Obj and Syntax = Syntax)
+    structure Printer
+      = LispPrinterFn (structure Obj = Obj and Syntax = Syntax)
+    structure Evaluator
+      = LispEvaluatorFn' (structure Obj = Obj and Syntax = Syntax)
+  end
+  structure Runtime = LispRuntimeFn (Lisp)
 in
-structure LI' = LispInterpreterFn (structure Lisp = L
-                                   and Syntax = LS
-                                   and Reader = LR
-                                   and Printer = LP
-                                   and Evaluator = LE)
+structure LI' = LispInterpreterFn (Runtime)
 end;
 
 (*
