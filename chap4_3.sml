@@ -23,8 +23,6 @@ functor AmbEvaluatorFn (structure Obj: LISP_OBJECT
         : LISP_EVALUATOR =
 struct
   type obj = Obj.t
-  type fail = unit -> obj
-  type succeed = obj * fail -> obj
 
   fun analyze exp : obj * obj * obj -> obj =
       if Syntax.isSelfEvaluating exp then
