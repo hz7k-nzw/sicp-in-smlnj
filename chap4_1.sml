@@ -2099,22 +2099,63 @@ struct
                         if i < 0 then error ()
                         else iter (lst, i)
                       end)),
-       Obj.subr2 ("assoc",
+       Obj.subr2 ("assq",
                   (fn (key,lst) =>
                       let
-                        fun iter (k,l) =
+                        fun iter l =
                             if Obj.isNull l then
                               Obj.F
                             else
                               let
                                 val p = Obj.car l
-                                val k' = Obj.car p
+                                val k = Obj.car p
                               in
-                                if Obj.equal (k,k') then p
-                                else iter (k, Obj.cdr l)
+                                if Obj.eq (key, k) then p
+                                else iter (Obj.cdr l)
                               end
                       in
-                        iter (key, lst)
+                        iter lst
+                      end)),
+       Obj.subr2 ("assoc",
+                  (fn (key,lst) =>
+                      let
+                        fun iter l =
+                            if Obj.isNull l then
+                              Obj.F
+                            else
+                              let
+                                val p = Obj.car l
+                                val k = Obj.car p
+                              in
+                                if Obj.equal (key, k) then p
+                                else iter (Obj.cdr l)
+                              end
+                      in
+                        iter lst
+                      end)),
+       Obj.subr2 ("memq",
+                  (fn (key,lst) =>
+                      let
+                        fun iter l =
+                            if Obj.isNull l then
+                              Obj.F
+                            else
+                              if Obj.eq (Obj.car l, key) then l
+                              else iter (Obj.cdr l)
+                      in
+                        iter lst
+                      end)),
+       Obj.subr2 ("member",
+                  (fn (key,lst) =>
+                      let
+                        fun iter l =
+                            if Obj.isNull l then
+                              Obj.F
+                            else
+                              if Obj.equal (Obj.car l, key) then l
+                              else iter (Obj.cdr l)
+                      in
+                        iter lst
                       end)),
        Obj.subr2R ("map",
                    (fn (p,lst,lsts) =>
@@ -2194,6 +2235,13 @@ struct
        Obj.subr2 ("<", Obj.bool o Obj.ltNum),
        Obj.subr2 (">=", Obj.bool o Obj.geNum),
        Obj.subr2 ("<=", Obj.bool o Obj.leNum),
+       Obj.subr1 ("abs",
+                  (fn n => if Obj.isInt n then
+                             (Obj.int o Int.abs o Obj.toInt) n
+                           else if Obj.isReal n then
+                             (Obj.real o Real.abs o Obj.toReal) n
+                           else
+                             raise Obj.Error ("Not a number: ~S", [n]))),
        (* prime: => included in chap1_2.sml: used in chap4_3.sml *)
        Obj.subr1 ("prime?", Obj.bool o prime o Obj.toInt),
        Obj.subr1 ("not", Obj.not),
@@ -2412,6 +2460,8 @@ struct
         ut ("(nth '(1 2 3 4) 2)", "3");
         ut ("(assoc 'b '((a . 1) (b . 2)))", "'(b . 2)");
         ut ("(assoc 'c '((a . 1) (b . 2)))", "false");
+        ut ("(member 'b '(a b c))", "'(b c)");
+        ut ("(member 'd '(a b c))", "false");
         ut ("(map (lambda (x) (+ x x)) '(1 2 3))", "'(2 4 6)");
         ut ("(map (lambda (x y) (+ x y)) '(1 2) '(3 2 1 0))", "'(4 4)");
         ut ("((lambda (x)"^
