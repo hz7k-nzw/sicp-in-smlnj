@@ -744,7 +744,7 @@ IS.nth (solve (fn x => x, 1.0, 0.001), 1000);
  *                         dt * (IS.car integrand) + initialValue,
  *                         dt))
  *     end;
- * => when integral' is used in solve' (defined bellow)
+ * => when integral' is used in solve' (defined below)
  *    it does not work (it hangs!)
  *)
 fun lazy integral' (integrand, initialValue:real, dt) =
