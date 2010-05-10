@@ -15,10 +15,10 @@ structure R = Util.Real;
 
 (* 4.2.2  An Interpreter with Lazy Evaluation *)
 
-functor LispEvaluatorFn'' (structure Obj: LISP_OBJECT
-                           and Syntax: LISP_SYNTAX
-                           sharing type Syntax.obj = Obj.t
-                           val log : string * Obj.t list -> unit)
+functor LazyEvaluatorFn (structure Obj: LISP_OBJECT
+                         and Syntax: LISP_SYNTAX
+                         sharing type Syntax.obj = Obj.t
+                         val log : string * Obj.t list -> unit)
         : LISP_EVALUATOR =
 struct
   type obj = Obj.t
@@ -208,8 +208,8 @@ local
           LP.terpri L.stdErr)
      *)
     structure Evaluator
-      = LispEvaluatorFn'' (structure Obj = Obj and Syntax = Syntax
-                           val log = log)
+      = LazyEvaluatorFn (structure Obj = Obj and Syntax = Syntax
+                         val log = log)
   end
   structure Runtime = LispRuntimeFn (Lisp)
 in
@@ -223,15 +223,14 @@ end;
 
 fun lazyEvalTest () =
     let
-      val ut = LI''.ut ()
+      val tests =
+          [("(define (try a b) (if (= a 0) 1 b))", "'try"),
+           ("(try 0 (/ 1 0))", "1"),
+           ("(define (fact n) (if (= n 0) 1 (* n (fact (- n 1)))))", "'fact"),
+           ("(fact 5)", "120")]
     in
-      ut ("(define (try a b) (if (= a 0) 1 b))", "'try");
-      ut ("(try 0 (/ 1 0))", "1");
-      ut ("(define (fact n) (if (= n 0) 1 (* n (fact (- n 1)))))", "'fact");
-      ut ("(fact 5)", "120");
-      print "done\n"
+      LI''.doTest tests
     end
-    handle e => LI''.onError (e, fn () => ())
 ;
 
 (*
@@ -242,57 +241,56 @@ fun lazyEvalTest () =
 
 fun streamTest () =
     let
-      val ut = LI''.ut ()
+      val tests =
+          [("(define (cons x y) (lambda (m) (m x y)))", "'cons"),
+           ("(define (car z) (z (lambda (p q) p)))", "'car"),
+           ("(define (cdr z) (z (lambda (p q) q)))", "'cdr"),
+           ("(define (list-ref items n)"^
+            "  (if (= n 0)"^
+            "      (car items)"^
+            "      (list-ref (cdr items) (- n 1))))",
+            "'list-ref"),
+           ("(define (map proc items)"^
+            "  (if (null? items)"^
+            "      '()"^
+            "      (cons (proc (car items))"^
+            "            (map proc (cdr items)))))",
+            "'map"),
+           ("(define (scale-list items factor)"^
+            "  (map (lambda (x) (* x factor))"^
+            "       items))",
+            "'scale-list"),
+           ("(define (add-lists list1 list2)"^
+            "  (cond ((null? list1) list2)"^
+            "        ((null? list2) list1)"^
+            "        (else (cons (+ (car list1) (car list2))"^
+            "                    (add-lists (cdr list1) (cdr list2))))))",
+            "'add-lists"),
+           ("(define ones (cons 1 ones))",
+            "'ones"),
+           ("(define integers (cons 1 (add-lists ones integers)))",
+            "'integers"),
+           ("(list-ref integers 17)", "18"),
+           ("(define (integral integrand initial-value dt)"^
+            "  (define int"^
+            "    (cons initial-value"^
+            "          (add-lists (scale-list integrand dt)"^
+            "                    int)))"^
+            "  int)",
+            "'integral"),
+           ("(define (solve f y0 dt)"^
+            "  (define y (integral dy y0 dt))"^
+            "  (define dy (map f y))"^
+            "  y)",
+            "'solve"),
+           ("(begin"^
+            "  (format \"solve[1000]=~S, expected=2.716924~%\""^
+            "          (list-ref (solve (lambda (x) x) 1 0.001) 1000))"^
+            "  'ok)",
+            "'ok")]
     in
-      ut ("(define (cons x y) (lambda (m) (m x y)))", "'cons");
-      ut ("(define (car z) (z (lambda (p q) p)))", "'car");
-      ut ("(define (cdr z) (z (lambda (p q) q)))", "'cdr");
-      ut ("(define (list-ref items n)"^
-          "  (if (= n 0)"^
-          "      (car items)"^
-          "      (list-ref (cdr items) (- n 1))))",
-          "'list-ref");
-      ut ("(define (map proc items)"^
-          "  (if (null? items)"^
-          "      '()"^
-          "      (cons (proc (car items))"^
-          "            (map proc (cdr items)))))",
-          "'map");
-      ut ("(define (scale-list items factor)"^
-          "  (map (lambda (x) (* x factor))"^
-          "       items))",
-          "'scale-list");
-      ut ("(define (add-lists list1 list2)"^
-          "  (cond ((null? list1) list2)"^
-          "        ((null? list2) list1)"^
-          "        (else (cons (+ (car list1) (car list2))"^
-          "                    (add-lists (cdr list1) (cdr list2))))))",
-          "'add-lists");
-      ut ("(define ones (cons 1 ones))",
-          "'ones");
-      ut ("(define integers (cons 1 (add-lists ones integers)))",
-          "'integers");
-      ut ("(list-ref integers 17)", "18");
-      ut ("(define (integral integrand initial-value dt)"^
-          "  (define int"^
-          "    (cons initial-value"^
-          "          (add-lists (scale-list integrand dt)"^
-          "                    int)))"^
-          "  int)",
-          "'integral");
-      ut ("(define (solve f y0 dt)"^
-          "  (define y (integral dy y0 dt))"^
-          "  (define dy (map f y))"^
-          "  y)",
-          "'solve");
-      ut ("(begin"^
-          "  (format \"solve[1000]=~S, expected=2.716924~%\""^
-          "          (list-ref (solve (lambda (x) x) 1 0.001) 1000))"^
-          "  'ok)",
-          "'ok");
-      print "done\n"
+      LI''.doTest tests
     end
-    handle e => LI''.onError (e, fn () => ())
 ;
 
 (*

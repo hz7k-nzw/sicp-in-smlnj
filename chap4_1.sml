@@ -2034,16 +2034,16 @@ end;
 
 signature INTERPRETER =
 sig
-  (* exception raised when unit test is failed *)
-  exception Test
   (* activates new top-level *)
   val go : unit -> unit
-  (* returns an executor for unit test *)
-  val ut : unit -> (string * string -> unit)
+end;
+
+signature TEST =
+sig
+  (* run the specified unit tests *)
+  val doTest : (string * string) list -> unit
   (* run predefined unit tests *)
   val test : unit -> unit
-  (* error handler *)
-  val onError : exn * (unit -> 'a) -> 'a
 end;
 
 functor LispRuntimeFn (Lisp : LISP) : LISP_RUNTIME =
@@ -2289,7 +2289,7 @@ struct
 end;
 
 functor LispInterpreterFn (Runtime : LISP_RUNTIME)
-        : INTERPRETER =
+        : sig include INTERPRETER TEST end =
 struct
   open Runtime
 
@@ -2380,122 +2380,130 @@ struct
             end)
       end
 
-  fun test () =
+  fun doTest tests =
       let
         val ut = ut ()
       in
-        ut ("(true? true)", "true");
-        ut ("(true? 1)", "true");
-        ut ("(true? '())", "true");
-        ut ("(true? false)", "false");
-        ut ("(false? true)", "false");
-        ut ("(false? 1)", "false");
-        ut ("(false? '())", "false");
-        ut ("(false? false)", "true");
-        ut ("(null? true)", "false");
-        ut ("(null? 1)", "false");
-        ut ("(null? '())", "true");
-        ut ("(null? false)", "false");
-        ut ("(+)", "0");
-        ut ("(+ 1)", "1");
-        ut ("(+ 1 2)", "3");
-        ut ("(+ 1 2 3)", "6");
-        ut ("(-)", "0");
-        ut ("(- 1)", "~1");
-        ut ("(- 1 2)", "~1");
-        ut ("(- 1 2 3)", "~4");
-        ut ("(*)", "1");
-        ut ("(* 2)", "2");
-        ut ("(* 2 3)", "6");
-        ut ("(* 2 3 4)", "24");
-        ut ("(/ 7 3)", "2");
-        ut ("(% 7 3)", "1");
-        ut ("(< 1 2)", "true");
-        ut ("(< 1 1)", "false");
-        ut ("(< 2 1)", "false");
-        ut ("(<= 1 2)", "true");
-        ut ("(<= 1 1)", "true");
-        ut ("(<= 2 1)", "false");
-        ut ("(> 1 2)", "false");
-        ut ("(> 1 1)", "false");
-        ut ("(> 2 1)", "true");
-        ut ("(>= 1 2)", "false");
-        ut ("(>= 1 1)", "true");
-        ut ("(>= 2 1)", "true");
-        ut ("(if (> 2 1) 'a 'b)", "'a");
-        ut ("(if (> 1 1) 'a 'b)", "'b");
-        ut ("(cond ((> 2 1) 'a) (else 'b))", "'a");
-        ut ("(cond ((> 1 1) 'a) (else 'b))", "'b");
-        ut ("(cond ((assoc 'b '((a 1) (b 2))) => cadr)" ^
-            "      (else false))", "2");
-        ut ("(cond ((assoc 'c '((a 1) (b 2))) => cadr)" ^
-            "      ((assoc 'a '((a 1) (b 2))) => cadr)" ^
-            "      (else false))", "1");
-        ut ("(and)", "true");
-        ut ("(and 1)", "1");
-        ut ("(and false (error \"oops!\"))", "false");
-        ut ("(and 1 false)", "false");
-        ut ("(and 1 true)", "true");
-        ut ("(and true 1)", "1");
-        ut ("(or)", "false");
-        ut ("(or 1)", "1");
-        ut ("(or false false)", "false");
-        ut ("(or false 1)", "1");
-        ut ("(or 1 (error \"oops!\"))", "1");
-        ut ("(or true (error \"oops!\"))", "true");
-        ut ("(let () 1)", "1");
-        ut ("(let ((x 1) (y 2)) (+ x y))", "3");
-        ut ("(begin (define x 1) x)", "1");
-        ut ("x", "1");
-        ut ("(begin (set! x 2) x)", "2");
-        ut ("x", "2");
-        ut ("(let ((x x)) (set! x 3) x)", "3");
-        ut ("x", "2");
-        ut ("(let* ((x 3) (y (+ x 2)) (z (+ x y 5))) (* x z))", "39");
-        ut ("(let loop ((a 1) (b 0) (count 10))" ^
-            " (if (= count 0) b (loop (+ a b) a (- count 1))))",
-            "55"); (* fib 10 -> 55 *)
-        ut ("(length '())", "0");
-        ut ("(length '(1 2 3))", "3");
-        ut ("(nth '(1 2 3 4) 2)", "3");
-        ut ("(assoc 'b '((a . 1) (b . 2)))", "'(b . 2)");
-        ut ("(assoc 'c '((a . 1) (b . 2)))", "false");
-        ut ("(member 'b '(a b c))", "'(b c)");
-        ut ("(member 'd '(a b c))", "false");
-        ut ("(map (lambda (x) (+ x x)) '(1 2 3))", "'(2 4 6)");
-        ut ("(map (lambda (x y) (+ x y)) '(1 2) '(3 2 1 0))", "'(4 4)");
-        ut ("((lambda (x)"^
-            "   (define (even? n)"^
-            "     (if (= n 0) true (odd? (- n 1))))"^
-            "   (define (odd? n)"^
-            "     (if (= n 0) false (even? (- n 1))))"^
-            "   (list (odd? x) (even? x))) 3)",
-            "(list true false)");
-        ut ("((lambda (x)"^
-            "   (letrec ((even?"^
-            "             (lambda (n)"^
-            "               (if (= n 0)"^
-            "                   true"^
-            "                 (odd? (- n 1)))))"^
-            "            (odd?"^
-            "             (lambda (n)"^
-            "               (if (= n 0)"^
-            "                   false"^
-            "                 (even? (- n 1))))))"^
-            "           (list (odd? x) (even? x)))) 3)",
-            "(list true false)");
-        ut ("((lambda (n)"^
-            "   ((lambda (fact)"^
-            "      (fact fact n))"^
-            "    (lambda (ft k)"^
-            "      (if (= k 1)"^
-            "          1"^
-            "          (* k (ft ft (- k 1)))))))"^
-            " 5)",
-            "120");
+        List.app ut tests;
         print "done\n"
       end
       handle e => onError (e, fn () => ())
+
+  fun test () =
+      let
+        val tests =
+            [("(true? true)", "true"),
+             ("(true? 1)", "true"),
+             ("(true? '())", "true"),
+             ("(true? false)", "false"),
+             ("(false? true)", "false"),
+             ("(false? 1)", "false"),
+             ("(false? '())", "false"),
+             ("(false? false)", "true"),
+             ("(null? true)", "false"),
+             ("(null? 1)", "false"),
+             ("(null? '())", "true"),
+             ("(null? false)", "false"),
+             ("(+)", "0"),
+             ("(+ 1)", "1"),
+             ("(+ 1 2)", "3"),
+             ("(+ 1 2 3)", "6"),
+             ("(-)", "0"),
+             ("(- 1)", "~1"),
+             ("(- 1 2)", "~1"),
+             ("(- 1 2 3)", "~4"),
+             ("(*)", "1"),
+             ("(* 2)", "2"),
+             ("(* 2 3)", "6"),
+             ("(* 2 3 4)", "24"),
+             ("(/ 7 3)", "2"),
+             ("(% 7 3)", "1"),
+             ("(< 1 2)", "true"),
+             ("(< 1 1)", "false"),
+             ("(< 2 1)", "false"),
+             ("(<= 1 2)", "true"),
+             ("(<= 1 1)", "true"),
+             ("(<= 2 1)", "false"),
+             ("(> 1 2)", "false"),
+             ("(> 1 1)", "false"),
+             ("(> 2 1)", "true"),
+             ("(>= 1 2)", "false"),
+             ("(>= 1 1)", "true"),
+             ("(>= 2 1)", "true"),
+             ("(if (> 2 1) 'a 'b)", "'a"),
+             ("(if (> 1 1) 'a 'b)", "'b"),
+             ("(cond ((> 2 1) 'a) (else 'b))", "'a"),
+             ("(cond ((> 1 1) 'a) (else 'b))", "'b"),
+             ("(cond ((assoc 'b '((a 1) (b 2))) => cadr)" ^
+              "      (else false))", "2"),
+             ("(cond ((assoc 'c '((a 1) (b 2))) => cadr)" ^
+              "      ((assoc 'a '((a 1) (b 2))) => cadr)" ^
+              "      (else false))", "1"),
+             ("(and)", "true"),
+             ("(and 1)", "1"),
+             ("(and false (error \"oops!\"))", "false"),
+             ("(and 1 false)", "false"),
+             ("(and 1 true)", "true"),
+             ("(and true 1)", "1"),
+             ("(or)", "false"),
+             ("(or 1)", "1"),
+             ("(or false false)", "false"),
+             ("(or false 1)", "1"),
+             ("(or 1 (error \"oops!\"))", "1"),
+             ("(or true (error \"oops!\"))", "true"),
+             ("(let () 1)", "1"),
+             ("(let ((x 1) (y 2)) (+ x y))", "3"),
+             ("(begin (define x 1) x)", "1"),
+             ("x", "1"),
+             ("(begin (set! x 2) x)", "2"),
+             ("x", "2"),
+             ("(let ((x x)) (set! x 3) x)", "3"),
+             ("x", "2"),
+             ("(let* ((x 3) (y (+ x 2)) (z (+ x y 5))) (* x z))", "39"),
+             ("(let loop ((a 1) (b 0) (count 10))" ^
+              " (if (= count 0) b (loop (+ a b) a (- count 1))))",
+              "55"), (* fib 10 -> 55 *)
+             ("(length '())", "0"),
+             ("(length '(1 2 3))", "3"),
+             ("(nth '(1 2 3 4) 2)", "3"),
+             ("(assoc 'b '((a . 1) (b . 2)))", "'(b . 2)"),
+             ("(assoc 'c '((a . 1) (b . 2)))", "false"),
+             ("(member 'b '(a b c))", "'(b c)"),
+             ("(member 'd '(a b c))", "false"),
+             ("(map (lambda (x) (+ x x)) '(1 2 3))", "'(2 4 6)"),
+             ("(map (lambda (x y) (+ x y)) '(1 2) '(3 2 1 0))", "'(4 4)"),
+             ("((lambda (x)"^
+              "   (define (even? n)"^
+              "     (if (= n 0) true (odd? (- n 1))))"^
+              "   (define (odd? n)"^
+              "     (if (= n 0) false (even? (- n 1))))"^
+              "   (list (odd? x) (even? x))) 3)",
+              "(list true false)"),
+             ("((lambda (x)"^
+              "   (letrec ((even?"^
+              "             (lambda (n)"^
+              "               (if (= n 0)"^
+              "                   true"^
+              "                 (odd? (- n 1)))))"^
+              "            (odd?"^
+              "             (lambda (n)"^
+              "               (if (= n 0)"^
+              "                   false"^
+              "                 (even? (- n 1))))))"^
+              "           (list (odd? x) (even? x)))) 3)",
+              "(list true false)"),
+             ("((lambda (n)"^
+              "   ((lambda (fact)"^
+              "      (fact fact n))"^
+              "    (lambda (ft k)"^
+              "      (if (= k 1)"^
+              "          1"^
+              "          (* k (ft ft (- k 1)))))))"^
+              " 5)",
+              "120")]
+      in
+        doTest tests
+      end
 end;
 
 local
@@ -2537,9 +2545,9 @@ end;
 
 (* 4.1.7  Separating Syntactic Analysis from Execution *)
 
-functor LispEvaluatorFn' (structure Obj: LISP_OBJECT
-                          and Syntax: LISP_SYNTAX
-                          sharing type Syntax.obj = Obj.t)
+functor AnalyzingEvaluatorFn (structure Obj: LISP_OBJECT
+                              and Syntax: LISP_SYNTAX
+                              sharing type Syntax.obj = Obj.t)
         : LISP_EVALUATOR =
 struct
   type obj = Obj.t
@@ -2689,7 +2697,7 @@ local
     structure Printer
       = LispPrinterFn (structure Obj = Obj and Syntax = Syntax)
     structure Evaluator
-      = LispEvaluatorFn' (structure Obj = Obj and Syntax = Syntax)
+      = AnalyzingEvaluatorFn (structure Obj = Obj and Syntax = Syntax)
   end
   structure Runtime = LispRuntimeFn (Lisp)
 in

@@ -284,8 +284,6 @@ functor AmbInterpreterFn (Runtime : LISP_RUNTIME)
 struct
   open Runtime
 
-  exception Test (* not used *)
-
   val stdIn = Obj.stdIn
   val stdOut = Obj.stdOut
   val stdErr = Obj.stdErr
@@ -380,12 +378,6 @@ struct
       end
 
   fun go () = (hello (); repl (); bye ())
-
-  fun ut () = (* not used *)
-      raise Obj.Error ("Not supported: ut", nil)
-
-  fun test () = (* not used *)
-      raise Obj.Error ("Not supported: test", nil)
 end;
 
 local
