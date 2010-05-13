@@ -1842,7 +1842,7 @@ struct
         val lenvals = length vals
       in
         if lenvars = lenvals then
-          ((ref (vars, map ref vals))::frames, eq)
+          ((ref (vars, List.map ref vals))::frames, eq)
         else if lenvars < lenvals then
           raise Fail "Too many arguments supplied -- extend"
         else
@@ -2003,7 +2003,7 @@ struct
         val lenvals = length vals
       in
         if lenvars = lenvals then
-          ((ref (vars, map ref vals))::frames, eq)
+          ((ref (vars, List.map ref vals))::frames, eq)
         else if lenvars < lenvals then
           raise Fail "Too many arguments supplied -- extend"
         else
@@ -2278,7 +2278,7 @@ struct
       let
         val subrName = Obj.sym o Obj.subrName
         val env = Obj.extendEnv (Obj.newEnv ())
-                                (map subrName subrs, subrs)
+                                (List.map subrName subrs, subrs)
         val userInitEnv = Obj.subr0 ("user-init-env", fn () => env)
       in
         Obj.defineEnv env (Syntax.TRUE, Obj.T);
@@ -2647,7 +2647,7 @@ struct
         val aprocs = toProcs (Syntax.operands exp)
       in
         (fn env => executeApplication (fproc env)
-                                      (map (fn p => p env) aprocs))
+                                      (List.map (fn p => p env) aprocs))
       end
 
   and executeApplication proc args =
