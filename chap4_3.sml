@@ -264,18 +264,22 @@ struct
         raise Obj.Error ("Improper sequence: ~S", [exps])
 
   (* declared in LISP_EVALUATOR signature *)
-  fun eval exp env =
+  fun eval exp =
       let
         val proc = analyze exp
-        val params = (Obj.car env, (* (real) env *)
-                      Obj.cadr env, (* success cont *)
-                      Obj.caddr env) (* failuer cont *)
       in
-        proc params
+        (fn env =>
+            let
+              val params = (Obj.car env, (* (real) env *)
+                            Obj.cadr env, (* success cont *)
+                            Obj.caddr env) (* failure cont *)
+            in
+              proc params
+            end)
       end
 
   (* declared in LISP_EVALUATOR signature *)
-  fun apply _ _ =
+  fun apply _ =
       raise Obj.Error ("Not supported: apply", nil)
 end;
 
