@@ -378,6 +378,7 @@ struct
                  | Sharp
                  | Quote
                  | DoubleQuote
+                 | SemiColon
                  | Eof
                  | None (* token for initial state *)
 
@@ -414,6 +415,7 @@ struct
        | Sharp => parseSharp ts
        | Quote => parseQuotation ts
        | DoubleQuote => parseString ts
+       | SemiColon => (parseComment ts; parseObj ts)
        | Eof => readError ("Unexpected eof")
        | None => readError ("Unexpected token: None"))
 
@@ -513,6 +515,17 @@ struct
         iter ""
       end
 
+  and parseComment (_, _, istream) =
+      let
+        fun skip () =
+            case TextIO.lookahead istream of
+              SOME c => if #"\n" = c then ()
+                        else (TextIO.input1 istream; skip ())
+            | _ => ()
+      in
+        skip ()
+      end
+
   and readToken (tokenref, unreadref, istream) =
       if !unreadref then
         unreadref := false (* true -> false *)
@@ -560,6 +573,7 @@ struct
                    | #"#" => Sharp
                    | #"'" => Quote
                    | #"\"" => DoubleQuote
+                   | #";" => SemiColon
                    | _ => iter (String.str c)
                end)
           | iter s =
@@ -578,6 +592,7 @@ struct
                   | #")" => Literal s
                   | #"'" => Literal s
                   | #"\"" => Literal s
+                  | #";" => Literal s
                   | _ => (read(); iter (s ^ String.str c))
               end
       in
