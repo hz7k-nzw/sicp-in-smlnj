@@ -46,8 +46,8 @@ sig
   val subr2R : string * (t * t * t list -> t) -> t
   val subr3R : string * (t * t * t * t list -> t) -> t
   val expr : t * t * t -> t
-  val inputStream : TextIO.instream -> t
-  val outputSream : TextIO.outstream -> t
+  val inputPort : TextIO.instream -> t
+  val outputPort : TextIO.outstream -> t
   val thunk : t * t -> t (* used in chap4_2.sml *)
 
   (* predicates for equality tests *)
@@ -73,8 +73,8 @@ sig
   val isStr : t -> bool
   val isSubr : t -> bool
   val isExpr : t -> bool
-  val isInputStream : t -> bool
-  val isOutputStream : t -> bool
+  val isInputPort : t -> bool
+  val isOutputPort : t -> bool
   val isEnv : t -> bool
   val isThunk : t -> bool (* used in chap4_2.sml *)
 
@@ -134,7 +134,7 @@ sig
   val exprBody : t -> t
   val exprEnv : t -> t
 
-  (* for input/output stream *)
+  (* for input/output port *)
   val toInstream : t -> TextIO.instream
   val toOutstream : t -> TextIO.outstream
 
@@ -640,10 +640,10 @@ struct
               pSubr obj
             else if Obj.isExpr obj then
               pExpr obj
-            else if Obj.isInputStream obj then
-              pInputStream obj
-            else if Obj.isOutputStream obj then
-              pOutputStream obj
+            else if Obj.isInputPort obj then
+              pInputPort obj
+            else if Obj.isOutputPort obj then
+              pOutputPort obj
             else if Obj.isEnv obj then
               pEnv obj
             else if Obj.isUndef obj then
@@ -671,10 +671,10 @@ struct
               (p " . "; pSubr obj)
             else if Obj.isExpr obj then
               (p " . "; pExpr obj)
-            else if Obj.isInputStream obj then
-              (p " . "; pInputStream obj)
-            else if Obj.isOutputStream obj then
-              (p " . "; pOutputStream obj)
+            else if Obj.isInputPort obj then
+              (p " . "; pInputPort obj)
+            else if Obj.isOutputPort obj then
+              (p " . "; pOutputPort obj)
             else if Obj.isEnv obj then
               (p " . "; pEnv obj)
             else if Obj.isUndef obj then
@@ -711,10 +711,10 @@ struct
                p1 (Syntax.makeLambda (params, body));
                p ">")
             end
-        and pInputStream obj =
-            p "#<InputStream>"
-        and pOutputStream obj =
-            p "#<OutputStream>"
+        and pInputPort obj =
+            p "#<InputPort>"
+        and pOutputPort obj =
+            p "#<OutputPort>"
         and pEnv obj =
             p "#<Env>"
         and pUndef obj =
@@ -1319,8 +1319,8 @@ struct
              | Str of string
              | Subr of int * string * proc
              | Expr of int * t * t * t
-             | InputStream of int * TextIO.instream
-             | OutputStream of int * TextIO.outstream
+             | InputPort of int * TextIO.instream
+             | OutputPort of int * TextIO.outstream
              | Environment of int * (t, t) Env.t
              | Thunk of int * thunk ref
 
@@ -1361,9 +1361,9 @@ struct
   val F = Bool false
   val zero = Num (Int 0)
   val one = Num (Int 1)
-  val stdIn = InputStream (inc (), TextIO.stdIn)
-  val stdOut = OutputStream (inc (), TextIO.stdOut)
-  val stdErr = OutputStream (inc (), TextIO.stdErr)
+  val stdIn = InputPort (inc (), TextIO.stdIn)
+  val stdOut = OutputPort (inc (), TextIO.stdOut)
+  val stdErr = OutputPort (inc (), TextIO.stdErr)
 
   (* constants for type info *)
   val t_list = Sym "list"
@@ -1373,8 +1373,8 @@ struct
   val t_str = Sym "string"
   val t_subr = Sym "subr"
   val t_expr = Sym "expr"
-  val t_input_stream = Sym "input-stream"
-  val t_output_stream = Sym "output-stream"
+  val t_input_port = Sym "input-port"
+  val t_output_port = Sym "output-port"
   val t_env = Sym "env"
   val t_thunk = Sym "thunk"
 
@@ -1436,8 +1436,8 @@ struct
   and subr2R (name, proc) = Subr (inc (), name, Proc2R proc)
   and subr3R (name, proc) = Subr (inc (), name, Proc3R proc)
   and expr (params, body, env) = Expr (inc (), params, body, env)
-  and inputStream is = InputStream (inc (), is)
-  and outputSream os = OutputStream (inc (), os)
+  and inputPort is = InputPort (inc (), is)
+  and outputPort os = OutputPort (inc (), os)
   and environment e = Environment (inc (), e) (* not exported *)
   and thunk (exp, env) = Thunk (inc (), ref (NotEvaluated (exp, env)))
 
@@ -1460,8 +1460,8 @@ struct
     | eq (Str s1, Str s2) = s1 = s2
     | eq (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
     | eq (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
-    | eq (InputStream (id1,_), InputStream (id2,_)) = id1 = id2
-    | eq (OutputStream (id1,_), OutputStream (id2,_)) = id1 = id2
+    | eq (InputPort (id1,_), InputPort (id2,_)) = id1 = id2
+    | eq (OutputPort (id1,_), OutputPort (id2,_)) = id1 = id2
     | eq (Environment (id1,_), Environment (id2,_)) = id1 = id2
     | eq (Thunk (id1,_), Thunk (id2,_)) = id1 = id2
     | eq _ = false
@@ -1477,8 +1477,8 @@ struct
     | equal (Str s1, Str s2) = s1 = s2
     | equal (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
     | equal (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
-    | equal (InputStream (id1,_), InputStream (id2,_)) = id1 = id2
-    | equal (OutputStream (id1,_), OutputStream (id2,_)) = id1 = id2
+    | equal (InputPort (id1,_), InputPort (id2,_)) = id1 = id2
+    | equal (OutputPort (id1,_), OutputPort (id2,_)) = id1 = id2
     | equal (Environment (id1,_), Environment (id2,_)) = id1 = id2
     | equal (Thunk (id1,_), Thunk (id2,_)) = id1 = id2
     | equal _ = false
@@ -1510,10 +1510,10 @@ struct
     | isSubr _ = false
   fun isExpr (Expr _) = true
     | isExpr _ = false
-  fun isInputStream (InputStream _) = true
-    | isInputStream _ = false
-  fun isOutputStream (OutputStream _) = true
-    | isOutputStream _ = false
+  fun isInputPort (InputPort _) = true
+    | isInputPort _ = false
+  fun isOutputPort (OutputPort _) = true
+    | isOutputPort _ = false
   fun isEnv (Environment _) = true
     | isEnv _ = false
   fun isThunk (Thunk _) = true
@@ -1708,11 +1708,11 @@ struct
   fun exprEnv (Expr (_,_,_,env)) = env
     | exprEnv obj = typeError (t_expr, obj)
 
-  (* for input/output stream *)
-  fun toInstream (InputStream (_,is)) = is
-    | toInstream obj = typeError (t_input_stream, obj)
-  fun toOutstream (OutputStream (_,os)) = os
-    | toOutstream obj = typeError (t_output_stream, obj)
+  (* for input/output port *)
+  fun toInstream (InputPort (_,is)) = is
+    | toInstream obj = typeError (t_input_port, obj)
+  fun toOutstream (OutputPort (_,os)) = os
+    | toOutstream obj = typeError (t_output_port, obj)
 
   (* for env *)
   fun symeq (Sym s1, Sym s2) = s1 = s2
@@ -2095,7 +2095,7 @@ struct
                       in
                         Obj.int (len lst)
                       end)),
-       Obj.subr2 ("nth",
+       Obj.subr2 ("list-ref",
                   (fn (lst,n) =>
                       let
                         fun error () =
@@ -2203,8 +2203,8 @@ struct
        Obj.subr1 ("string?", Obj.bool o Obj.isStr),
        Obj.subr1 ("subr?", Obj.bool o Obj.isSubr),
        Obj.subr1 ("expr?", Obj.bool o Obj.isExpr),
-       Obj.subr1 ("input-stream?", Obj.bool o Obj.isInputStream),
-       Obj.subr1 ("output-stream?", Obj.bool o Obj.isOutputStream),
+       Obj.subr1 ("input-port?", Obj.bool o Obj.isInputPort),
+       Obj.subr1 ("output-port?", Obj.bool o Obj.isOutputPort),
        Obj.subr0R ("+",
                    (fn ns =>
                        let
@@ -2261,12 +2261,12 @@ struct
        Obj.subr1 ("prime?", Obj.bool o prime o Obj.toInt),
        Obj.subr1 ("not", Obj.not),
        Obj.subr0 ("read", fn () => Reader.read Obj.stdIn),
-       Obj.subr1 ("print",
+       Obj.subr1 ("write",
                   (fn obj => Printer.print (Obj.stdOut, obj))),
        Obj.subr1 ("print-string",
                   (fn obj =>
                       Printer.printString (Obj.stdOut, Obj.toString obj))),
-       Obj.subr0 ("terpri",
+       Obj.subr0 ("newline",
                   (fn () => Printer.terpri Obj.stdOut)),
        Obj.subr0 ("flush",
                   (fn () => Printer.flush Obj.stdOut)),
@@ -2370,7 +2370,7 @@ struct
         val counter = ref 1
         fun inc () = let val n = !counter in counter := n+1; n end
         val env = setupEnv ()
-        val s2i = Obj.inputStream o TextIO.openString
+        val s2i = Obj.inputPort o TextIO.openString
       in
         (fn (input, expected) =>
             let
@@ -2480,7 +2480,7 @@ struct
               "55"), (* fib 10 -> 55 *)
              ("(length '())", "0"),
              ("(length '(1 2 3))", "3"),
-             ("(nth '(1 2 3 4) 2)", "3"),
+             ("(list-ref '(1 2 3 4) 2)", "3"),
              ("(assoc 'b '((a . 1) (b . 2)))", "'(b . 2)"),
              ("(assoc 'c '((a . 1) (b . 2)))", "false"),
              ("(member 'b '(a b c))", "'(b c)"),
