@@ -291,17 +291,6 @@ struct
   val quit = Obj.sym ":q"
   val again = Obj.sym ":a"
 
-  fun makeRuntime () =
-      let
-        val rt = Runtime.makeRuntime ()
-        (* prime: => included in chap1_2.sml *)
-        val subr = Obj.subr1 ("prime?", Obj.bool o prime o Obj.toInt)
-        val subrName = Obj.sym o Obj.subrName
-      in
-        Obj.defineEnv (env rt) (subrName subr, subr);
-        rt
-      end
-
   fun hello rt =
       ignore (Printer.format (stdOut rt,
                               "Hello!~%"^
@@ -337,7 +326,7 @@ struct
         cont ()
       end
 
-  fun repl rt =
+  fun repl rt prompt =
       let
         fun toSuccessCont p = Obj.subr2 ("succeed", p)
         fun toFailureCont p = Obj.subr0 ("fail", p)
@@ -345,7 +334,7 @@ struct
             let
               fun loop' tryAgain =
                   let
-                    val obj = (Printer.format (stdOut rt, "~%> ", nil);
+                    val obj = (Printer.format (stdOut rt, prompt, nil);
                                Reader.read (stdIn rt))
                   in
                     if Obj.isEof obj orelse
@@ -399,11 +388,37 @@ struct
         loop ()
       end
 
+  fun load rt file =
+      let
+        val oldIn = stdIn rt
+        fun body () =
+            let
+              val newIn = Obj.openIn file
+              fun body' () = (setStdIn rt newIn; repl rt "~%")
+              fun cleanup' () = ignore (Obj.closeIn newIn)
+            in
+              U.unwindProtect body' cleanup'
+            end
+        fun cleanup () = setStdIn rt oldIn
+      in
+        U.unwindProtect body cleanup
+      end
+
   fun go () =
       let
         val rt = makeRuntime ()
+        (* load *)
+        val fnLoad = (fn file => (load rt (Obj.toString file); Obj.undef))
+        val subrLoad = Obj.subr1 ("load", fnLoad)
+        val symLoad = Obj.sym (Obj.subrName subrLoad)
+        val _ = Obj.defineEnv (env rt) (symLoad, subrLoad)
+        (* prime: => included in chap1_2.sml *)
+        val fnPrime = Obj.bool o prime o Obj.toInt
+        val subrPrime = Obj.subr1 ("prime?", fnPrime)
+        val symPrime = Obj.sym (Obj.subrName subrPrime)
+        val _ = Obj.defineEnv (env rt) (symPrime, subrPrime)
       in
-        (hello rt; repl rt; bye rt)
+        (hello rt; repl rt "~%> "; bye rt)
       end
 end;
 

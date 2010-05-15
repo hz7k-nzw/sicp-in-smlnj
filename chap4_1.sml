@@ -137,6 +137,10 @@ sig
   (* for input/output port *)
   val toInstream : t -> TextIO.instream
   val toOutstream : t -> TextIO.outstream
+  val openIn : string -> t
+  val openOut : string -> t
+  val closeIn : t -> t
+  val closeOut : t -> t
 
   (* for env *)
   val newEnv : unit -> t
@@ -1449,39 +1453,26 @@ struct
     | toList obj = typeError (t_list, obj)
 
   (* predicates for equality tests *)
-  fun eq (Undef, Undef) = true
-    | eq (Eof, Eof) = true
-    | eq (Nil, Nil) = true
-    | eq (Cons (h1, t1), Cons (h2, t2)) = h1 = h2 andalso t1 = t2
-    | eq (Sym s1, Sym s2) = s1 = s2
-    | eq (Bool b1, Bool b2) = b1 = b2
-    | eq (Num (Int i1), Num (Int i2)) = i1 = i2
-    | eq (Num (Real r1), Num (Real r2)) = Real.== (r1, r2)
-    | eq (Str s1, Str s2) = s1 = s2
-    | eq (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
-    | eq (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
-    | eq (InputPort (id1,_), InputPort (id2,_)) = id1 = id2
-    | eq (OutputPort (id1,_), OutputPort (id2,_)) = id1 = id2
-    | eq (Environment (id1,_), Environment (id2,_)) = id1 = id2
-    | eq (Thunk (id1,_), Thunk (id2,_)) = id1 = id2
-    | eq _ = false
-  fun equal (Undef, Undef) = true
-    | equal (Eof, Eof) = true
-    | equal (Nil, Nil) = true
-    | equal (Cons (h1, t1), Cons (h2, t2)) = equal (!h1, !h2) andalso
+  fun atomEq (Undef, Undef) = true
+    | atomEq (Eof, Eof) = true
+    | atomEq (Nil, Nil) = true
+    | atomEq (Sym s1, Sym s2) = s1 = s2
+    | atomEq (Bool b1, Bool b2) = b1 = b2
+    | atomEq (Num (Int i1), Num (Int i2)) = i1 = i2
+    | atomEq (Num (Real r1), Num (Real r2)) = Real.== (r1, r2)
+    | atomEq (Str s1, Str s2) = s1 = s2
+    | atomEq (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
+    | atomEq (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
+    | atomEq (InputPort (id1,_), InputPort (id2,_)) = id1 = id2
+    | atomEq (OutputPort (id1,_), OutputPort (id2,_)) = id1 = id2
+    | atomEq (Environment (id1,_), Environment (id2,_)) = id1 = id2
+    | atomEq (Thunk (id1,_), Thunk (id2,_)) = id1 = id2
+    | atomEq _ = false
+  fun eq (Cons (h1, t1), Cons (h2, t2)) = h1 = h2 andalso t1 = t2
+    | eq (o1, o2) = atomEq (o1, o2)
+  fun equal (Cons (h1, t1), Cons (h2, t2)) = equal (!h1, !h2) andalso
                                              equal (!t1, !t2)
-    | equal (Sym s1, Sym s2) = s1 = s2
-    | equal (Bool b1, Bool b2) = b1 = b2
-    | equal (Num (Int i1), Num (Int i2)) = i1 = i2
-    | equal (Num (Real r1), Num (Real r2)) = Real.== (r1, r2)
-    | equal (Str s1, Str s2) = s1 = s2
-    | equal (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
-    | equal (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
-    | equal (InputPort (id1,_), InputPort (id2,_)) = id1 = id2
-    | equal (OutputPort (id1,_), OutputPort (id2,_)) = id1 = id2
-    | equal (Environment (id1,_), Environment (id2,_)) = id1 = id2
-    | equal (Thunk (id1,_), Thunk (id2,_)) = id1 = id2
-    | equal _ = false
+    | equal (o1, o2) = atomEq (o1, o2)
 
   (* predicates for boolean tests *)
   fun isTrue (Bool false) = false
@@ -1713,6 +1704,12 @@ struct
     | toInstream obj = typeError (t_input_port, obj)
   fun toOutstream (OutputPort (_,os)) = os
     | toOutstream obj = typeError (t_output_port, obj)
+  fun openIn name = (inputPort o TextIO.openIn) name
+  fun openOut name = (outputPort o TextIO.openOut) name
+  fun closeIn (InputPort (_,is)) = (TextIO.closeIn is; undef)
+    | closeIn obj = typeError (t_input_port, obj)
+  fun closeOut (OutputPort (_,os)) = (TextIO.closeOut os; undef)
+    | closeOut obj = typeError (t_output_port, obj)
 
   (* for env *)
   fun symeq (Sym s1, Sym s2) = s1 = s2
@@ -2279,6 +2276,13 @@ struct
                            else
                              raise Obj.Error ("Not a number: ~S", [n]))),
        Obj.subr1 ("not", Obj.not),
+       Obj.subr1 ("open-input-file", Obj.openIn o Obj.toString),
+       Obj.subr1 ("open-output-file", Obj.openOut o Obj.toString),
+       Obj.subr1 ("close-input-port", Obj.closeIn),
+       Obj.subr1 ("close-output-port", Obj.closeOut),
+       Obj.subr2 ("eval",
+                  (fn (exp, env) =>
+                      Evaluator.eval exp env)),
        Obj.subr2 ("apply",
                   (fn (proc,args) =>
                       Evaluator.apply proc (Obj.toList args))),
@@ -2378,11 +2382,11 @@ struct
         cont ()
       end
 
-  fun repl rt =
+  fun repl rt prompt =
       let
         fun loop () =
             let
-              val obj = (Printer.format (stdOut rt, "~%> ", nil);
+              val obj = (Printer.format (stdOut rt, prompt, nil);
                          Reader.read (stdIn rt))
             in
               if Obj.isEof obj orelse Obj.eq (obj, quit) then
@@ -2400,11 +2404,32 @@ struct
         loop ()
       end
 
+  fun load rt file =
+      let
+        val oldIn = stdIn rt
+        fun body () =
+            let
+              val newIn = Obj.openIn file
+              fun body' () = (setStdIn rt newIn; repl rt "~%")
+              fun cleanup' () = ignore (Obj.closeIn newIn)
+            in
+              U.unwindProtect body' cleanup'
+            end
+        fun cleanup () = setStdIn rt oldIn
+      in
+        U.unwindProtect body cleanup
+      end
+
   fun go () =
       let
         val rt = makeRuntime ()
+        (* load *)
+        val fnLoad = (fn file => (load rt (Obj.toString file); Obj.undef))
+        val subrLoad = Obj.subr1 ("load", fnLoad)
+        val symLoad = Obj.sym (Obj.subrName subrLoad)
+        val _ = Obj.defineEnv (env rt) (symLoad, subrLoad)
       in
-        (hello rt; repl rt; bye rt)
+        (hello rt; repl rt "~%> "; bye rt)
       end
 
   fun ut rt =
