@@ -59,4 +59,8 @@ structure Util = struct
     | assoc key ((p as (key', _))::ps) =
       if key = key' then SOME p
       else assoc key ps
+
+  (* try : unit -> 'a, finally -> unit -> unit *)
+  fun unwindProtect try finally =
+      (try () handle e => (finally (); raise e)) before finally ()
 end;
