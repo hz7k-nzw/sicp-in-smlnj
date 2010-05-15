@@ -288,49 +288,65 @@ functor AmbInterpreterFn (Runtime : LISP_RUNTIME)
 struct
   open Runtime
 
-  val stdIn = Obj.stdIn
-  val stdOut = Obj.stdOut
-  val stdErr = Obj.stdErr
   val quit = Obj.sym ":q"
   val again = Obj.sym ":a"
 
-  fun hello () =
-      ignore (Printer.format (stdOut, "Hello!~%"^
-                                      "Type '~S' to exit~%"^
-                                      "Type '~S' to try again~%",
+  fun makeRuntime () =
+      let
+        val rt = Runtime.makeRuntime ()
+        (* prime: => included in chap1_2.sml *)
+        val subr = Obj.subr1 ("prime?", Obj.bool o prime o Obj.toInt)
+        val subrName = Obj.sym o Obj.subrName
+      in
+        Obj.defineEnv (env rt) (subrName subr, subr);
+        rt
+      end
+
+  fun hello rt =
+      ignore (Printer.format (stdOut rt,
+                              "Hello!~%"^
+                              "Type '~S' to exit~%"^
+                              "Type '~S' to try again~%",
                               [quit, again]))
 
-  fun bye () =
-      ignore (Printer.format (stdOut, "Bye!~%", nil))
+  fun bye rt =
+      ignore (Printer.format (stdOut rt,
+                              "Bye!~%",
+                              nil))
 
-  fun onError (Obj.Error (ctrlstr,args), cont) =
+  fun onError rt (Obj.Error (ctrlstr,args), cont) =
       let
         val msg = "Runtime error: " ^ ctrlstr ^ "~%"
       in
-        Printer.format (stdErr, msg, args);
+        Printer.format (stdErr rt, msg, args);
         cont ()
       end
-    | onError (IO.Io {name,function,cause}, cont) =
+    | onError rt (IO.Io {name,function,cause}, cont) =
       let
         val msg = "IO error: " ^ name ^ " -- " ^ function ^
                   " (cause: " ^ exnMessage cause ^ ")~%"
       in
-        Printer.format (stdErr, msg, nil);
+        Printer.format (stdErr rt, msg, nil);
         cont ()
       end
-    | onError (e, _) = raise e
-
-  fun repl () =
+    | onError rt (e, cont) =
       let
-        val env = setupEnv ()
+        val msg = "Error: " ^ exnMessage e ^ "~%"
+      in
+        Printer.format (stdErr rt, msg, nil);
+        cont ()
+      end
+
+  fun repl rt =
+      let
         fun toSuccessCont p = Obj.subr2 ("succeed", p)
         fun toFailureCont p = Obj.subr0 ("fail", p)
         fun loop () =
             let
               fun loop' tryAgain =
                   let
-                    val obj = (Printer.format (stdOut, "~%> ", nil);
-                               Reader.read stdIn)
+                    val obj = (Printer.format (stdOut rt, "~%> ", nil);
+                               Reader.read (stdIn rt))
                   in
                     if Obj.isEof obj orelse
                        Obj.eq (obj, quit) then
@@ -345,7 +361,7 @@ struct
                                     let
                                       val msg = "Success: ~S"
                                     in
-                                      Printer.format (stdOut,msg,[obj']);
+                                      Printer.format (stdOut rt, msg, [obj']);
                                       loop' nextAlternative
                                     end)
                         (* ambeval failure *)
@@ -355,13 +371,15 @@ struct
                                     let
                                       val msg = "Fail: No more values of ~S"
                                     in
-                                      Printer.format (stdOut,msg,[obj]);
+                                      Printer.format (stdOut rt, msg, [obj]);
                                       loop ()
                                     end)
                         val msg = "Eval: Starting a new problem~%"
                       in
-                        Printer.format (stdOut, msg, []);
-                        Evaluator.eval obj (Obj.fromList [env, succeed, fail])
+                        Printer.format (stdOut rt, msg, []);
+                        Evaluator.eval obj (Obj.fromList [env rt,
+                                                          succeed,
+                                                          fail])
                       end
                   end
               val noCurrentProblem =
@@ -370,18 +388,23 @@ struct
                           let
                             val msg = "Try again: No current problem"
                           in
-                            Printer.format (stdOut,msg,[]);
+                            Printer.format (stdOut rt, msg, []);
                             loop ()
                           end)
             in
               loop' noCurrentProblem
             end
-            handle e => onError (e, loop)
+            handle e => onError rt (e, loop)
       in
         loop ()
       end
 
-  fun go () = (hello (); repl (); bye ())
+  fun go () =
+      let
+        val rt = makeRuntime ()
+      in
+        (hello rt; repl rt; bye rt)
+      end
 end;
 
 local

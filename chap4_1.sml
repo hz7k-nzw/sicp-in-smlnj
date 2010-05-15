@@ -2,7 +2,7 @@
  * SICP in SML/NJ
  * by Kenji Nozawa (hz7k-nzw@asahi-net.or.jp)
  *
- * Dependency: util.sml, chap1_2.sml;
+ * Dependency: util.sml;
  *)
 
 structure U = Util;
@@ -2044,7 +2044,15 @@ end;
 signature LISP_RUNTIME =
 sig
   include LISP
-  val setupEnv : unit -> Obj.t
+  type rt
+  val env : rt -> Obj.t
+  val stdIn : rt -> Obj.t
+  val stdOut : rt -> Obj.t
+  val stdErr : rt -> Obj.t
+  val setStdIn : rt -> Obj.t -> unit
+  val setStdOut : rt -> Obj.t -> unit
+  val setStdErr : rt -> Obj.t -> unit
+  val makeRuntime : unit -> rt
 end;
 
 signature INTERPRETER =
@@ -2064,6 +2072,19 @@ end;
 functor LispRuntimeFn (Lisp : LISP) : LISP_RUNTIME =
 struct
   open Lisp
+
+  type rt = {Env : Obj.t,
+             StdIn : Obj.t ref,
+             StdOut : Obj.t ref,
+             StdErr : Obj.t ref}
+
+  fun env ({Env,...}:rt) = Env
+  fun stdIn ({StdIn,...}:rt) = !StdIn
+  fun stdOut ({StdOut,...}:rt) = !StdOut
+  fun stdErr ({StdErr,...}:rt) = !StdErr
+  fun setStdIn ({StdIn,...}:rt) newStdIn = StdIn := newStdIn
+  fun setStdOut ({StdOut,...}:rt) newStdOut = StdOut := newStdOut
+  fun setStdErr ({StdErr,...}:rt) newStdErr = StdErr := newStdErr
 
   val subrs =
       [Obj.subr2 ("cons", Obj.cons),
@@ -2257,25 +2278,7 @@ struct
                              (Obj.real o Real.abs o Obj.toReal) n
                            else
                              raise Obj.Error ("Not a number: ~S", [n]))),
-       (* prime: => included in chap1_2.sml: used in chap4_3.sml *)
-       Obj.subr1 ("prime?", Obj.bool o prime o Obj.toInt),
        Obj.subr1 ("not", Obj.not),
-       Obj.subr0 ("read", fn () => Reader.read Obj.stdIn),
-       Obj.subr1 ("write",
-                  (fn obj => Printer.print (Obj.stdOut, obj))),
-       Obj.subr1 ("print-string",
-                  (fn obj =>
-                      Printer.printString (Obj.stdOut, Obj.toString obj))),
-       Obj.subr0 ("newline",
-                  (fn () => Printer.terpri Obj.stdOut)),
-       Obj.subr0 ("flush",
-                  (fn () => Printer.flush Obj.stdOut)),
-       Obj.subr1R ("format",
-                   (fn (fmt,args) =>
-                       Printer.format (Obj.stdOut, Obj.toString fmt, args))),
-       Obj.subr2 ("eval",
-                  (fn (exp,env) =>
-                      Evaluator.eval exp env)),
        Obj.subr2 ("apply",
                   (fn (proc,args) =>
                       Evaluator.apply proc (Obj.toList args))),
@@ -2289,17 +2292,46 @@ struct
                    (fn (fmt,args) =>
                        raise Obj.Error (Obj.toString fmt, args)))]
 
-  fun setupEnv () =
+  fun makeRuntime () =
       let
         val subrName = Obj.sym o Obj.subrName
         val env = Obj.extendEnv (Obj.newEnv ())
                                 (List.map subrName subrs, subrs)
-        val userInitEnv = Obj.subr0 ("user-init-env", fn () => env)
+        val stdInRef = ref Obj.stdIn
+        val stdOutRef = ref Obj.stdOut
+        val stdErrRef = ref Obj.stdErr
+        val subrs' = [
+            Obj.subr0 ("user-init-env",
+                       (fn () => env)),
+            Obj.subr0 ("current-input-port",
+                       (fn () => !stdInRef)),
+            Obj.subr0 ("current-output-port",
+                       (fn () => !stdOutRef)),
+            Obj.subr0 ("current-error-port",
+                       (fn () => !stdErrRef)),
+            Obj.subr0 ("read",
+                       (fn () => Reader.read (!stdInRef))),
+            Obj.subr1 ("write",
+                       (fn obj => Printer.print (!stdOutRef, obj))),
+            Obj.subr1 ("print-string",
+                       (fn obj => Printer.printString (!stdOutRef,
+                                                       Obj.toString obj))),
+            Obj.subr0 ("newline",
+                       (fn () => Printer.terpri (!stdOutRef))),
+            Obj.subr0 ("flush",
+                       (fn () => Printer.flush (!stdOutRef))),
+            Obj.subr1R ("format",
+                        (fn (fmt,args) => Printer.format (!stdOutRef,
+                                                          Obj.toString fmt,
+                                                          args)))]
       in
         Obj.defineEnv env (Syntax.TRUE, Obj.T);
         Obj.defineEnv env (Syntax.FALSE, Obj.F);
-        Obj.defineEnv env (subrName userInitEnv, userInitEnv);
-        env
+        List.app (fn subr =>
+                     ignore (Obj.defineEnv env (subrName subr, subr)))
+                 subrs';
+        {Env = env, StdIn = stdInRef,
+         StdOut = stdOutRef, StdErr = stdErrRef}
       end
 end;
 
@@ -2310,66 +2342,75 @@ struct
 
   exception Test
 
-  val stdIn = Obj.stdIn
-  val stdOut = Obj.stdOut
-  val stdErr = Obj.stdErr
   val quit = Obj.sym ":q"
 
-  fun hello () =
-      ignore (Printer.format (stdOut, "Hello!~%"^
-                                      "Type '~S' to exit~%",
+  fun hello rt =
+      ignore (Printer.format (stdOut rt,
+                              "Hello!~%"^
+                              "Type '~S' to exit~%",
                               [quit]))
 
-  fun bye () =
-      ignore (Printer.format (stdOut, "Bye!~%", nil))
+  fun bye rt =
+      ignore (Printer.format (stdOut rt,
+                              "Bye!~%",
+                              nil))
 
-  fun onError (Obj.Error (ctrlstr,args), cont) =
+  fun onError rt (Obj.Error (ctrlstr,args), cont) =
       let
         val msg = "Runtime error: " ^ ctrlstr ^ "~%"
       in
-        Printer.format (stdErr, msg, args);
+        Printer.format (stdErr rt, msg, args);
         cont ()
       end
-    | onError (IO.Io {name,function,cause}, cont) =
+    | onError rt (IO.Io {name,function,cause}, cont) =
       let
         val msg = "IO error: " ^ name ^ " -- " ^ function ^
                   " (cause: " ^ exnMessage cause ^ ")~%"
       in
-        Printer.format (stdErr, msg, nil);
+        Printer.format (stdErr rt, msg, nil);
         cont ()
       end
-    | onError (e, _) = raise e
-
-  fun repl () =
+    | onError rt (e, cont) =
       let
-        val env = setupEnv ()
+        val msg = "Error: " ^ exnMessage e ^ "~%"
+      in
+        Printer.format (stdErr rt, msg, nil);
+        cont ()
+      end
+
+  fun repl rt =
+      let
         fun loop () =
             let
-              val obj = (Printer.format (stdOut, "~%> ", nil);
-                         Reader.read stdIn)
+              val obj = (Printer.format (stdOut rt, "~%> ", nil);
+                         Reader.read (stdIn rt))
             in
               if Obj.isEof obj orelse Obj.eq (obj, quit) then
                 ()
               else
                 let
-                  val obj' = Evaluator.eval obj env
+                  val obj' = Evaluator.eval obj (env rt)
                 in
-                  Printer.print (stdOut, obj');
+                  Printer.print (stdOut rt, obj');
                   loop ()
                 end
             end
-            handle e => onError (e, loop)
+            handle e => onError rt (e, loop)
       in
         loop ()
       end
 
-  fun go () = (hello (); repl (); bye ())
+  fun go () =
+      let
+        val rt = makeRuntime ()
+      in
+        (hello rt; repl rt; bye rt)
+      end
 
-  fun ut () =
+  fun ut rt =
       let
         val counter = ref 1
         fun inc () = let val n = !counter in counter := n+1; n end
-        val env = setupEnv ()
         val s2i = Obj.inputPort o TextIO.openString
       in
         (fn (input, expected) =>
@@ -2379,16 +2420,16 @@ struct
               val is' = s2i expected
               val obj = Reader.read is
               val obj' = Reader.read is'
-              val ret = Evaluator.eval obj env
-              val ret' = Evaluator.eval obj' env
+              val ret = Evaluator.eval obj (env rt)
+              val ret' = Evaluator.eval obj' (env rt)
             in
               if Obj.equal (ret, ret') then
-                (Printer.format (stdOut,
+                (Printer.format (stdOut rt,
                                  "[~S] OK: ~S -> ~S~%",
                                  [n, obj, ret]);
                  ())
               else
-                (Printer.format (stdOut,
+                (Printer.format (stdOut rt,
                                  "[~S] NG: ~S -> ~S; (expected: ~S)~%",
                                  [n, obj, ret, ret']);
                  raise Test)
@@ -2397,12 +2438,12 @@ struct
 
   fun doTest tests =
       let
-        val ut = ut ()
+        val rt = makeRuntime ()
+        val ut = ut rt
       in
-        List.app ut tests;
-        print "done\n"
+        List.app ut tests
+        handle e => onError rt (e, fn () => ())
       end
-      handle e => onError (e, fn () => ())
 
   fun test () =
       let
