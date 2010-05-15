@@ -51,9 +51,10 @@ Currently, the following sections are translated:
  4.2  Variations on a Scheme -- Lazy Evaluation
  => chap4_2.sml
  4.3  Variations on a Scheme -- Nondeterministic Computing
- => chap4_3.sml
+ => chap4_3.sml, chap4_3_example.scm
  4.4  Logic Programming
- => not translated yet
+  => chap4_4_lazy.sml, chap4_4_example.scm
+     (The lazy evaluation feature of SML/NJ is used.)
 
 5  Computing with Register Machines
 => not translated yet
