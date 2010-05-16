@@ -403,11 +403,15 @@ struct
       let
         val ts = (ref None, ref false, istream)
       in
-        readToken ts;
-        case getToken ts of
-          Eof => Obj.eof
-        | _ => (unreadToken ts; parseObj ts)
+        parseObjOrEof ts
       end
+
+  and parseObjOrEof ts =
+      (readToken ts;
+       case getToken ts of
+         Eof => Obj.eof
+       | SemiColon => (parseComment ts; parseObjOrEof ts)
+       | _ => (unreadToken ts; parseObj ts))
 
   and parseObj ts =
       (readToken ts;
