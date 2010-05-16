@@ -2348,25 +2348,38 @@ struct
 
   val quit = Obj.sym ":q"
 
-  fun hello rt =
+  fun makeRuntime () =
+      let
+        val rt = Runtime.makeRuntime ()
+        (* load *)
+        val fnLoad = (fn file => (load (rt, Obj.toString file); Obj.undef))
+        val subrLoad = Obj.subr1 ("load", fnLoad)
+        val symLoad = Obj.sym (Obj.subrName subrLoad)
+        val _ = Obj.defineEnv (env rt) (symLoad, subrLoad)
+      in
+        rt
+      end
+
+  and hello rt =
       ignore (Printer.format (stdOut rt,
                               "Hello!~%"^
                               "Type '~S' to exit~%",
                               [quit]))
 
-  fun bye rt =
+  and bye rt =
       ignore (Printer.format (stdOut rt,
                               "Bye!~%",
                               nil))
 
-  fun onError rt (Obj.Error (ctrlstr,args), cont) =
+  and onError rt =
+   fn (Obj.Error (ctrlstr,args), cont) =>
       let
         val msg = "Runtime error: " ^ ctrlstr ^ "~%"
       in
         Printer.format (stdErr rt, msg, args);
         cont ()
       end
-    | onError rt (IO.Io {name,function,cause}, cont) =
+    | (IO.Io {name,function,cause}, cont) =>
       let
         val msg = "IO error: " ^ name ^ " -- " ^ function ^
                   " (cause: " ^ exnMessage cause ^ ")~%"
@@ -2374,7 +2387,7 @@ struct
         Printer.format (stdErr rt, msg, nil);
         cont ()
       end
-    | onError rt (e, cont) =
+    | (e, cont) =>
       let
         val msg = "Error: " ^ exnMessage e ^ "~%"
       in
@@ -2382,7 +2395,7 @@ struct
         cont ()
       end
 
-  fun repl rt prompt =
+  and repl (rt, prompt) =
       let
         fun loop () =
             let
@@ -2404,13 +2417,13 @@ struct
         loop ()
       end
 
-  fun load rt file =
+  and load (rt, file) =
       let
         val oldIn = stdIn rt
         fun body () =
             let
               val newIn = Obj.openIn file
-              fun body' () = (setStdIn rt newIn; repl rt "~%")
+              fun body' () = (setStdIn rt newIn; repl (rt,"~%"))
               fun cleanup' () = ignore (Obj.closeIn newIn)
             in
               U.unwindProtect body' cleanup'
@@ -2420,19 +2433,14 @@ struct
         U.unwindProtect body cleanup
       end
 
-  fun go () =
+  and go () =
       let
         val rt = makeRuntime ()
-        (* load *)
-        val fnLoad = (fn file => (load rt (Obj.toString file); Obj.undef))
-        val subrLoad = Obj.subr1 ("load", fnLoad)
-        val symLoad = Obj.sym (Obj.subrName subrLoad)
-        val _ = Obj.defineEnv (env rt) (symLoad, subrLoad)
       in
-        (hello rt; repl rt "~%> "; bye rt)
+        (hello rt; repl (rt,"~%> "); bye rt)
       end
 
-  fun ut rt =
+  and ut rt =
       let
         val counter = ref 1
         fun inc () = let val n = !counter in counter := n+1; n end
@@ -2461,7 +2469,7 @@ struct
             end)
       end
 
-  fun doTest tests =
+  and doTest tests =
       let
         val rt = makeRuntime ()
         val ut = ut rt
@@ -2470,7 +2478,7 @@ struct
         handle e => onError rt (e, fn () => ())
       end
 
-  fun test () =
+  and test () =
       let
         val tests =
             [("(true? true)", "true"),

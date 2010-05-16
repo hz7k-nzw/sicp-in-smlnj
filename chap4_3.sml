@@ -291,26 +291,44 @@ struct
   val quit = Obj.sym ":q"
   val again = Obj.sym ":a"
 
-  fun hello rt =
+  fun makeRuntime () =
+      let
+        val rt = Runtime.makeRuntime ()
+        (* load *)
+        val fnLoad = (fn file => (load (rt, Obj.toString file); Obj.undef))
+        val subrLoad = Obj.subr1 ("load", fnLoad)
+        val symLoad = Obj.sym (Obj.subrName subrLoad)
+        val _ = Obj.defineEnv (env rt) (symLoad, subrLoad)
+        (* prime: => included in chap1_2.sml *)
+        val fnPrime = Obj.bool o prime o Obj.toInt
+        val subrPrime = Obj.subr1 ("prime?", fnPrime)
+        val symPrime = Obj.sym (Obj.subrName subrPrime)
+        val _ = Obj.defineEnv (env rt) (symPrime, subrPrime)
+      in
+        rt
+      end
+
+  and hello rt =
       ignore (Printer.format (stdOut rt,
                               "Hello!~%"^
                               "Type '~S' to exit~%"^
                               "Type '~S' to try again~%",
                               [quit, again]))
 
-  fun bye rt =
+  and bye rt =
       ignore (Printer.format (stdOut rt,
                               "Bye!~%",
                               nil))
 
-  fun onError rt (Obj.Error (ctrlstr,args), cont) =
+  and onError rt =
+   fn (Obj.Error (ctrlstr,args), cont) =>
       let
         val msg = "Runtime error: " ^ ctrlstr ^ "~%"
       in
         Printer.format (stdErr rt, msg, args);
         cont ()
       end
-    | onError rt (IO.Io {name,function,cause}, cont) =
+    | (IO.Io {name,function,cause}, cont) =>
       let
         val msg = "IO error: " ^ name ^ " -- " ^ function ^
                   " (cause: " ^ exnMessage cause ^ ")~%"
@@ -318,7 +336,7 @@ struct
         Printer.format (stdErr rt, msg, nil);
         cont ()
       end
-    | onError rt (e, cont) =
+    | (e, cont) =>
       let
         val msg = "Error: " ^ exnMessage e ^ "~%"
       in
@@ -326,7 +344,7 @@ struct
         cont ()
       end
 
-  fun repl rt prompt =
+  and repl (rt, prompt) =
       let
         fun toSuccessCont p = Obj.subr2 ("succeed", p)
         fun toFailureCont p = Obj.subr0 ("fail", p)
@@ -388,13 +406,13 @@ struct
         loop ()
       end
 
-  fun load rt file =
+  and load (rt, file) =
       let
         val oldIn = stdIn rt
         fun body () =
             let
               val newIn = Obj.openIn file
-              fun body' () = (setStdIn rt newIn; repl rt "~%")
+              fun body' () = (setStdIn rt newIn; repl (rt,"~%"))
               fun cleanup' () = ignore (Obj.closeIn newIn)
             in
               U.unwindProtect body' cleanup'
@@ -404,21 +422,11 @@ struct
         U.unwindProtect body cleanup
       end
 
-  fun go () =
+  and go () =
       let
         val rt = makeRuntime ()
-        (* load *)
-        val fnLoad = (fn file => (load rt (Obj.toString file); Obj.undef))
-        val subrLoad = Obj.subr1 ("load", fnLoad)
-        val symLoad = Obj.sym (Obj.subrName subrLoad)
-        val _ = Obj.defineEnv (env rt) (symLoad, subrLoad)
-        (* prime: => included in chap1_2.sml *)
-        val fnPrime = Obj.bool o prime o Obj.toInt
-        val subrPrime = Obj.subr1 ("prime?", fnPrime)
-        val symPrime = Obj.sym (Obj.subrName subrPrime)
-        val _ = Obj.defineEnv (env rt) (symPrime, subrPrime)
       in
-        (hello rt; repl rt "~%> "; bye rt)
+        (hello rt; repl (rt,"~%> "); bye rt)
       end
 end;
 

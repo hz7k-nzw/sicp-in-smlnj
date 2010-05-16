@@ -90,31 +90,16 @@ struct
         f
       end
 
-  fun append (s1, s2) =
-      let
-        fun lazy f (Cons (x1, s1), s2) =
-            (U.log "append"; Cons (x1, f (s1, s2)))
-          | f (Nil, s2) = s2
-      in
-        f (s1, s2)
-      end
+  fun lazy append (Cons (x1, s1), s2) =
+      (U.log "append"; Cons (x1, append (s1, s2)))
+    | append (Nil, s2) = s2
 
-  fun interleave (s1, s2) =
-      let
-        fun lazy f (Cons (x1, s1), s2) =
-            (U.log "interleave"; Cons (x1, f (s2, s1)))
-          | f (Nil, s2) = s2
-      in
-        f (s1, s2)
-      end
+  fun lazy interleave (Cons (x1, s1), s2) =
+      (U.log "interleave"; Cons (x1, interleave (s2, s1)))
+    | interleave (Nil, s2) = s2
 
-  fun flatten s =
-      let
-        fun lazy f (Cons (x, s)) = interleave (x, f s)
-          | f Nil = Nil
-      in
-        f s
-      end
+  fun lazy flatten (Cons (x, s)) = interleave (x, flatten s)
+    | flatten Nil = Nil
 
   fun flatmap proc s = flatten (map proc s)
 
@@ -272,7 +257,7 @@ sig
   (* for others *)
   val makeRuntime : unit -> qrt
   val makeNewFrame : unit -> (obj,obj) Frame.t
-  val executePredicate : prt -> obj -> bool
+  val executePredicate : qrt -> obj -> bool
   val error : string * obj list -> 'a
   val log : string * obj list -> unit
   val debug : bool ref
@@ -360,34 +345,34 @@ struct
       else error ("Unknown expression: ~S", [exp])
 
   (*fun isAssertionToBeAdded exp = Obj.eq (typeOf exp, ASSERT)*)
-  fun isAssertionToBeAdded exp = isTaggedList ASSERT exp
-  fun addAssertionBody exp = (Obj.car o contentsOf) exp
+  val isAssertionToBeAdded = isTaggedList ASSERT
+  val addAssertionBody = Obj.car o contentsOf
 
-  fun isConjunction exp = isTaggedList CONJUNCT exp
-  fun conjunctionBody exp = contentsOf exp
-  fun isEmptyConjunction exps = Obj.isNull exps
-  fun firstConjunct exps = Obj.car exps
-  fun restConjuncts exps = Obj.cdr exps
+  val isConjunction = isTaggedList CONJUNCT
+  val conjunctionBody = contentsOf
+  val isEmptyConjunction = Obj.isNull
+  val firstConjunct = Obj.car
+  val restConjuncts = Obj.cdr
 
-  fun isDisjunction exp = isTaggedList DISJUNCT exp
-  fun disjunctionBody exp = contentsOf exp
-  fun isEmptyDisjunction exps = Obj.isNull exps
-  fun firstDisjunct exps = Obj.car exps
-  fun restDisjuncts exps = Obj.cdr exps
+  val isDisjunction = isTaggedList DISJUNCT
+  val disjunctionBody = contentsOf
+  val isEmptyDisjunction = Obj.isNull
+  val firstDisjunct = Obj.car
+  val restDisjuncts = Obj.cdr
 
-  fun isNegation exp = isTaggedList NEGATE exp
+  val isNegation = isTaggedList NEGATE
   (*fun negatedQuery exps = Obj.car exps*)
-  fun negatedQuery exp = (Obj.car o contentsOf) exp
+  val negatedQuery = Obj.car o contentsOf
 
-  fun isPredicate exp = isTaggedList PREDICATE exp
-  fun predicateBody exp = contentsOf exp
-  fun predicate exps = Obj.car exps
-  fun args exps = Obj.cdr exps
+  val isPredicate = isTaggedList PREDICATE
+  val predicateBody = contentsOf
+  val predicate = Obj.car
+  val args = Obj.cdr
 
-  fun isAlwaysTrue exp = isTaggedList ALWAYS_TRUE exp
+  val isAlwaysTrue = isTaggedList ALWAYS_TRUE
 
-  fun isRule exp = isTaggedList RULE exp
-  fun conclusion rule = Obj.cadr rule
+  val isRule = isTaggedList RULE
+  val conclusion = Obj.cadr
   fun ruleBody rule =
       if Obj.isNull (Obj.cddr rule) then
         Obj.fromList [ALWAYS_TRUE]
@@ -417,8 +402,8 @@ struct
         mapOverSymbols expandQuestionMark exp
       end
 
-  fun isVar exp = isTaggedList QUESTION exp
-  fun isConstantSymbol exp = Obj.isSym exp
+  val isVar = isTaggedList QUESTION
+  val isConstantSymbol = Obj.isSym
 
   fun contractQuestionMark var =
       let
@@ -559,19 +544,20 @@ struct
         treeWalk exp
       end
 
+  fun tableEq ((x1,y1),(x2,y2)) =
+      Obj.eq (x1,x2) andalso Obj.eq (y1,y2)
+
   fun makeRuntime () =
       {PRED_RUNTIME = LispRuntime.makeRuntime (),
        THE_ASSERTIONS = ref NULL_OBJ_STREAM,
        THE_RULES = ref NULL_OBJ_STREAM,
-       THE_TABLE = Table.make
-                       (fn ((x1,y1),(x2,y2)) =>
-                           Obj.eq (x1,x2) andalso Obj.eq (y1,y2))}
+       THE_TABLE = Table.make tableEq}
 
   fun makeNewFrame () = Frame.make Obj.equal
 
-  fun executePredicate prt exp =
+  fun executePredicate ({PRED_RUNTIME,...}:qrt) exp =
       let
-        val env = LispRuntime.env prt
+        val env = LispRuntime.env PRED_RUNTIME
         val pred = Evaluator.eval (predicate exp) env
         val args = Obj.toList (args exp)
       in
@@ -611,10 +597,8 @@ struct
         Q.isVar key
       end
 
-  fun get ({THE_TABLE,...}:Q.qrt) (key1, key2) =
-      Table.lookup THE_TABLE (key1, key2)
-  fun put ({THE_TABLE,...}:Q.qrt) (key1, key2) stream =
-      Table.insert THE_TABLE (key1, key2) stream
+  fun get ({THE_TABLE,...}:Q.qrt) = Table.lookup THE_TABLE
+  fun put ({THE_TABLE,...}:Q.qrt) = Table.insert THE_TABLE
 
   fun getStream (qrt:Q.qrt) (key1, key2) =
       (Q.log ("getStream: ~S ~S", [key1,key2]);
@@ -737,13 +721,12 @@ struct
         simpleQuery qrt query frameStream
       )
 
-  and simpleQuery (qrt:Q.qrt) queryPattern frameStream =
+  and simpleQuery (qrt:Q.qrt) queryPattern =
       (Q.log ("simpleQuery: ~S", [queryPattern]);
       Stream.flatmap
           (fn frame =>
               Stream.append (findAssertion qrt queryPattern frame,
                              (*delay*)applyRules qrt queryPattern frame))
-          frameStream
       )
 
   and conjoin (qrt:Q.qrt) conjuncts frameStream =
@@ -766,7 +749,7 @@ struct
              (*delay*)disjoin qrt (Q.restDisjuncts disjuncts) frameStream)
       )
 
-  and negate (qrt:Q.qrt) query frameStream =
+  and negate (qrt:Q.qrt) query =
       (Q.log ("negate: ~S", [query]);
       Stream.flatmap
           (fn frame =>
@@ -777,10 +760,9 @@ struct
                   Stream.Nil => frameStream'
                 | _ => Q.NULL_FRAME_STREAM
               end)
-          frameStream
       )
 
-  and lispValue (qrt:Q.qrt) call frameStream =
+  and lispValue (qrt:Q.qrt) call =
       (Q.log ("lispValue: ~S", [call]);
       Stream.flatmap
           (fn frame =>
@@ -788,14 +770,12 @@ struct
                 fun handler exp frame =
                     Q.error ("Unknown pat var -- lispValue: ~S", [exp])
                 val exp = Q.instantiate call frame handler
-                val prt = #PRED_RUNTIME qrt
               in
-                if Q.executePredicate prt exp then
+                if Q.executePredicate qrt exp then
                   Stream.singleton frame
                 else
                   Q.NULL_FRAME_STREAM
               end)
-          frameStream
       )
 
   and findAssertion (qrt:Q.qrt) pattern frame =
@@ -843,16 +823,12 @@ functor QueryInterpreterFn (LispRuntime : LISP_RUNTIME)
         : INTERPRETER =
 struct
   structure Obj = LispRuntime.Obj
-  structure Reader = LispRuntime.Reader
-  structure Evaluator = LispRuntime.Evaluator
-  structure Printer = LispRuntime.Printer
-
-  structure Q
-    = QueryFn (LispRuntime)
-  structure QDB
-    = QueryDataBaseFn (structure Query = Q)
-  structure QE
-    = QueryEvaluatorFn (structure Query = Q and DataBase = QDB)
+  structure LR = LispRuntime.Reader
+  structure LE = LispRuntime.Evaluator
+  structure LP = LispRuntime.Printer
+  structure Q = QueryFn (LispRuntime)
+  structure QDB = QueryDataBaseFn (structure Query = Q)
+  structure QE = QueryEvaluatorFn (structure Query = Q and DataBase = QDB)
 
   val stdIn = LispRuntime.stdIn
   val stdOut = LispRuntime.stdOut
@@ -861,57 +837,68 @@ struct
   val eval = Obj.sym ":e"
   val debug = Obj.sym ":d"
 
-  fun hello (qrt:Q.qrt) =
+  fun makeRuntime () =
+      let
+        val qrt = Q.makeRuntime ()
+        val lrt = #PRED_RUNTIME qrt
+        (* load *)
+        val fnLoad = (fn file => (load (qrt, Obj.toString file); Obj.undef))
+        val subrLoad = Obj.subr1 ("load", fnLoad)
+        val symLoad = Obj.sym (Obj.subrName subrLoad)
+        val _ = Obj.defineEnv (LispRuntime.env lrt) (symLoad, subrLoad)
+      in
+        qrt
+      end
+
+  and hello (qrt:Q.qrt) =
       let
         val lrt = #PRED_RUNTIME qrt
       in
-        ignore (Printer.format (stdOut lrt,
-                                "Hello!~%"^
-                                "Type '~S' to exit~%"^
-                                "Type '~S' to eval lisp expression~%"^
-                                "Type '~S' to toggle debug flag~%",
-                                [quit, eval, debug]))
+        ignore (LP.format (stdOut lrt,
+                           "Hello!~%"^
+                           "Type '~S' to exit~%"^
+                           "Type '~S' to eval lisp expression~%"^
+                           "Type '~S' to toggle debug flag~%",
+                           [quit, eval, debug]))
       end
 
-  fun bye (qrt:Q.qrt) =
+  and bye (qrt:Q.qrt) =
       let
         val lrt = #PRED_RUNTIME qrt
       in
-        ignore (Printer.format (stdOut lrt,
-                                "Bye!~%",
-                                nil))
+        ignore (LP.format (stdOut lrt,
+                           "Bye!~%",
+                           nil))
       end
 
-  fun onError (qrt:Q.qrt)
-              (Obj.Error (ctrlstr,args), cont) =
+  and onError (qrt:Q.qrt) =
+   fn (Obj.Error (ctrlstr,args), cont) =>
       let
         val lrt = #PRED_RUNTIME qrt
         val msg = "Runtime error: " ^ ctrlstr ^ "~%"
       in
-        Printer.format (stdErr lrt, msg, args);
+        LP.format (stdErr lrt, msg, args);
         cont ()
       end
-    | onError (qrt:Q.qrt)
-              (IO.Io {name,function,cause}, cont) =
+    | (IO.Io {name,function,cause}, cont) =>
       let
         val lrt = #PRED_RUNTIME qrt
         val msg = "IO error: " ^ name ^ " -- " ^ function ^
                   " (cause: " ^ exnMessage cause ^ ")~%"
       in
-        Printer.format (stdErr lrt, msg, nil);
+        LP.format (stdErr lrt, msg, nil);
         cont ()
       end
-    | onError (qrt:Q.qrt)
-              (e, cont) =
+    | (e, cont) =>
       let
         val lrt = #PRED_RUNTIME qrt
         val msg = "Error: " ^ exnMessage e ^ "~%"
       in
-        Printer.format (stdErr lrt, msg, nil);
+        LP.format (stdErr lrt, msg, nil);
         cont ()
       end
 
-  fun repl (qrt:Q.qrt) prompt =
+  and repl (qrt:Q.qrt, prompt) =
       let
         val lrt = #PRED_RUNTIME qrt
         val counter = ref 0
@@ -920,8 +907,8 @@ struct
         fun reset () = counter := 0
         fun loop () =
             let
-              val obj = (Printer.format (stdOut lrt, prompt, nil);
-                         (Q.querySyntaxProcess o Reader.read) (stdIn lrt))
+              val obj = (LP.format (stdOut lrt, prompt, nil);
+                         (Q.querySyntaxProcess o LR.read) (stdIn lrt))
               val frameStream = Stream.singleton (Q.makeNewFrame ())
               fun handler exp frame = Q.contractQuestionMark exp
             in
@@ -929,31 +916,31 @@ struct
                 ()
               else if Obj.eq (obj, eval) then (* toggle debug flag *)
                 (let
-                   val obj' = Reader.read (stdIn lrt)
-                   val obj'' = Evaluator.eval obj' (LispRuntime.env lrt)
+                   val obj' = LR.read (stdIn lrt)
+                   val obj'' = LE.eval obj' (LispRuntime.env lrt)
                  in
-                   Printer.print (stdOut lrt, obj'');
+                   LP.print (stdOut lrt, obj'');
                    loop ()
                  end)
               else if Obj.eq (obj, debug) then (* eval lisp exp *)
                 (Q.debug := not (!Q.debug);
-                 Printer.format (stdOut lrt, "Debug: ~S.~%",
-                                 [Obj.bool (!Q.debug)]);
+                 LP.format (stdOut lrt, "Debug: ~S.~%",
+                            [Obj.bool (!Q.debug)]);
                  loop ())
               else if Q.isAssertionToBeAdded obj then
                 (QDB.addRuleOrAssertion qrt (Q.addAssertionBody obj);
-                 Printer.format (stdOut lrt, "Assertion added to DB.~%", nil);
+                 LP.format (stdOut lrt, "Assertion added to DB.~%", nil);
                  loop ())
               else
                 (reset ();
                  Stream.app
-                    (fn exp => Printer.format (stdOut lrt, "~S: ~S~%",
-                                               [inc(), exp]))
+                    (fn exp => LP.format (stdOut lrt, "~S: ~S~%",
+                                          [inc(), exp]))
                     (Stream.map
                          (fn frame => Q.instantiate obj frame handler)
                          (QE.eval qrt obj frameStream));
-                 Printer.format (stdOut lrt, "~S result(s) found.~%",
-                                 [count ()]);
+                 LP.format (stdOut lrt, "~S result(s) found.~%",
+                            [count ()]);
                  loop ())
             end
             handle e => onError qrt (e, loop)
@@ -961,14 +948,14 @@ struct
         loop ()
       end
 
-  fun load qrt file =
+  and load (qrt:Q.qrt, file) =
       let
         val lrt = #PRED_RUNTIME qrt
         val oldIn = stdIn lrt
         fun body () =
             let
               val newIn = Obj.openIn file
-              fun body' () = (LispRuntime.setStdIn lrt newIn; repl qrt "~%")
+              fun body' () = (LispRuntime.setStdIn lrt newIn; repl (qrt,"~%"))
               fun cleanup' () = ignore (Obj.closeIn newIn)
             in
               U.unwindProtect body' cleanup'
@@ -978,17 +965,11 @@ struct
         U.unwindProtect body cleanup
       end
 
-  fun go () =
+  and go () =
       let
-        val qrt = Q.makeRuntime ()
-        val lrt = #PRED_RUNTIME qrt
-        (* load *)
-        val fnLoad = (fn file => (load qrt (Obj.toString file); Obj.undef))
-        val subrLoad = Obj.subr1 ("load", fnLoad)
-        val symLoad = Obj.sym (Obj.subrName subrLoad)
-        val _ = Obj.defineEnv (LispRuntime.env lrt) (symLoad, subrLoad)
+        val qrt = makeRuntime ()
       in
-        (hello qrt; repl qrt "~%> "; bye qrt)
+        (hello qrt; repl (qrt,"~%> "); bye qrt)
       end
 end;
 
