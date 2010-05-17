@@ -1,6 +1,9 @@
 ;;; examples for chap4_3.sml
+;;;
+;;; The following data are borrowed from the SICP Web Site:
+;;; http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-28.html
 
-(list (amb 1 2 3) (amb 'a 'b))
+;;;(list (amb 1 2 3) (amb 'a 'b))
 
 (define (an-integer-starting-from n)
   (amb n (an-integer-starting-from (+ n 1))))
@@ -18,11 +21,11 @@
     (require (prime? (+ a b)))
     (list a b)))
 
-(prime-sum-pair '(1 3 5 8) '(20 35 110))
+;;;(prime-sum-pair '(1 3 5 8) '(20 35 110))
 
-(prime-sum-pair '(19 27 30) '(11 36 58))
+;;;(prime-sum-pair '(19 27 30) '(11 36 58))
 
-;; Logic Puzzles
+;;; Logic Puzzles
 
 (define (distinct? items)
   (cond ((null? items) true)
@@ -51,9 +54,9 @@
           (list 'miller miller)
           (list 'smith smith))))
 
-(multiple-dwelling)
+;;;(multiple-dwelling)
 
-;; Parsing natural language
+;;; Parsing natural language
 
 (define nouns '(noun student professor cat class))
 
@@ -86,7 +89,7 @@
     (require (null? *unparsed* ))
     sent))
 
-(parse '(the cat eats))
+;;;(parse '(the cat eats))
 
 (define prepositions '(prep for to in by with))
 
@@ -121,6 +124,6 @@
                              (parse-prepositional-phrase)))))
   (maybe-extend (parse-simple-noun-phrase)))
 
-(parse '(the student with the cat sleeps in the class))
+;;;(parse '(the student with the cat sleeps in the class))
 
-(parse '(the professor lectures to the student with the cat))
+;;;(parse '(the professor lectures to the student with the cat))

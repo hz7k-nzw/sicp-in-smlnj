@@ -1,4 +1,9 @@
-;;; sample data base for chap4_4_lazy.sml
+;;; examples for chap4_4_lazy.sml
+;;;
+;;; The following data are borrowed from the SICP Web Site:
+;;; http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-29.html
+
+;;; A sample data base
 
 (assert! (address (Bitdiddle Ben) (Slumerville (Ridge Road) 10)))
 (assert! (job (Bitdiddle Ben) (computer wizard)))
@@ -50,6 +55,42 @@
 (assert! (can-do-job (administration secretary)
                      (administration big wheel)))
 
+;;; Simple queries
+
+;;;(job ?x (computer programmer))
+;;;(address ?x ?y)
+;;;(supervisor ?x ?x)
+;;;(job ?x (computer ?type))
+;;;(job ?x (computer . ?type))
+
+;;; Exercise 4.55
+;;;(supervisor ?x (Bitdiddle Ben))
+;;;(job ?x (accounting . ?y))
+;;;(address ?x (Slumerville . ?y))
+
+;;; Compound queries
+
+;;;(and (job ?person (computer programmer))
+;;;     (address ?person ?where))
+;;;(or (supervisor ?x (Bitdiddle Ben))
+;;;    (supervisor ?x (Hacker Alyssa P)))
+;;;(and (supervisor ?x (Bitdiddle Ben))
+;;;     (not (job ?x (computer programmer))))
+;;;(and (salary ?person ?amount)
+;;;     (lisp-value > ?amount 30000))
+
+;;; Exercise 4.56
+;;;(and (supervisor ?x (Bitdiddle Ben))
+;;;     (address ?x ?y))
+;;;(and (salary ?x ?y1)
+;;;     (salary (Bitdiddle Ben) ?y2)
+;;;     (lisp-value < ?y1 ?y2))
+;;;(and (supervisor ?x ?y)
+;;;     (not (job ?y (computer . ?a)))
+;;;     (job ?y ?z))
+
+;;; Rules
+
 (assert! (rule (lives-near ?person-1 ?person-2)
                (and (address ?person-1 (?town . ?rest-1))
                     (address ?person-2 (?town . ?rest-2))
@@ -61,3 +102,40 @@
                (and (supervisor ?middle-manager ?person)
                     (supervisor ?x ?middle-manager))))
 
+;;;(lives-near ?x (Bitdiddle Ben))
+;;;(and (job ?x (computer programmer))
+;;;     (lives-near ?x (Bitdiddle Ben)))
+
+(assert! (rule (outranked-by ?staff-person ?boss)
+               (or (supervisor ?staff-person ?boss)
+                   (and (supervisor ?staff-person ?middle-manager)
+                        (outranked-by ?middle-manager ?boss)))))
+
+;;; Logic as programs
+
+(assert! (rule (append-to-form () ?y ?y)))
+(assert! (rule (append-to-form (?u . ?v) ?y (?u . ?z))
+               (append-to-form ?v ?y ?z)))
+
+;;;(append-to-form (a b) (c d) ?z)
+;;;(append-to-form (a b) ?y (a b c d))
+;;;(append-to-form ?x ?y (a b c d))
+
+;;; Exercise 4.61
+
+(assert! (rule (?x next-to ?y in (?x ?y . ?u))))
+(assert! (rule (?x next-to ?y in (?v . ?z))
+               (?x next-to ?y in ?z)))
+
+;;;(?x next-to ?y in (1 (2 3) 4))
+;;;(?x next-to 1 in (2 1 3 1))
+
+;;; Exercise 4.62
+(assert! (rule (last-pair (?x) (?x))))
+(assert! (rule (last-pair (?u . ?v) ?z)
+               (last-pair ?v ?z)))
+
+;;;(last-pair (3) ?x)
+;;;(last-pair (1 2 3) ?x)
+;;;(last-pair (2 ?x) (3))
+;;;(last-pair ?x (3)) ; never stops!
