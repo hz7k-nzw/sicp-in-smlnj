@@ -170,9 +170,9 @@ end;
 
 signature QUERY =
 sig
-  type obj
-  type prt
-  type qrt =
+  type obj (* type of query expressions *)
+  type prt (* type of runtime context for predicate evaluator *)
+  type qrt = (* type of runtime context for query language *)
        {PRED_RUNTIME : prt,
         THE_ASSERTIONS : obj Stream.t ref,
         THE_RULES : obj Stream.t ref,
@@ -807,8 +807,8 @@ struct
         val cleanRule = Q.renameVariablesIn rule
       in
         case Q.unifyMatch queryPat
-                              (Q.conclusion cleanRule)
-                              (SOME queryFrame) of
+                          (Q.conclusion cleanRule)
+                          (SOME queryFrame) of
           SOME unifyResult => (Q.log ("applyOneRule: BINGO",nil);
                                eval qrt
                                     (Q.ruleBody cleanRule)
@@ -914,32 +914,36 @@ struct
             in
               if Obj.isEof obj orelse Obj.eq (obj, quit) then
                 ()
-              else if Obj.eq (obj, eval) then (* toggle debug flag *)
-                (let
-                   val obj' = LR.read (stdIn lrt)
-                   val obj'' = LE.eval obj' (LispRuntime.env lrt)
-                 in
-                   LP.print (stdOut lrt, obj'');
-                   loop ()
-                 end)
-              else if Obj.eq (obj, debug) then (* eval lisp exp *)
+              else if Obj.eq (obj, eval) then (* eval lisp exp *)
+                let
+                  val obj' = LR.read (stdIn lrt)
+                  val obj'' = LE.eval obj' (LispRuntime.env lrt)
+                in
+                  LP.format (stdOut lrt, "Eval: ~S.~%", [obj'']);
+                  loop ()
+                end
+              else if Obj.eq (obj, debug) then (* toggle debug flag *)
                 (Q.debug := not (!Q.debug);
                  LP.format (stdOut lrt, "Debug: ~S.~%",
                             [Obj.bool (!Q.debug)]);
                  loop ())
               else if Q.isAssertionToBeAdded obj then
-                (QDB.addRuleOrAssertion qrt (Q.addAssertionBody obj);
-                 LP.format (stdOut lrt, "Assertion added to DB.~%", nil);
-                 loop ())
+                let
+                  val body = Q.addAssertionBody obj
+                in
+                  QDB.addRuleOrAssertion qrt body;
+                  LP.format (stdOut lrt, "Added to DB: ~S.~%", [body]);
+                  loop ()
+                end
               else
                 (reset ();
                  Stream.app
-                    (fn exp => LP.format (stdOut lrt, "~S: ~S~%",
-                                          [inc(), exp]))
+                    (fn exp => (inc ();
+                                LP.format (stdOut lrt, "~S~%", [exp])))
                     (Stream.map
                          (fn frame => Q.instantiate obj frame handler)
                          (QE.eval qrt obj frameStream));
-                 LP.format (stdOut lrt, "~S result(s) found.~%",
+                 LP.format (stdOut lrt, "Query: ~S result(s) found.~%",
                             [count ()]);
                  loop ())
             end
