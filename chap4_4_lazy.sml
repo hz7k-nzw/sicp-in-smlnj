@@ -109,7 +109,20 @@ end;
 structure S = Stream;
 val rec lazy ones = S.Cons (1, ones);
 val rec lazy twos = S.Cons (2, twos);
-val rec lazy x = S.interleave (ones, twos);
+val x = S.interleave (ones, twos);
+val y = S.Cons (ones, S.Cons (twos, S.Nil));
+val z = S.flatten y;
+val u = S.map ~ ones;
+val v = S.map (S.singleton o ~) ones;
+val w = S.flatmap (S.singleton o ~) ones;
+S.take 10 ones; (* [1,1,1,1,1,1,1,1,1,1] : int list *)
+S.take 10 twos; (* [2,2,2,2,2,2,2,2,2,2] : int list *)
+S.take 10 x;    (* [1,2,1,2,1,2,1,2,1,2] : int list *)
+S.take 2 y;     (* [$$,$$] : int Stream.t! ?.susp list *)
+S.take 10 z;    (* [1,2,1,2,1,2,1,2,1,2] : int list *)
+S.take 10 u;    (* [~1,~1,~1,~1,~1,~1,~1,~1,~1,~1] : int list *)
+S.take 10 v;    (* [$$,$$,$$,$$,$$,$$,$$,$$,$$,$$] : int Stream.t! ?.susp list *)
+S.take 10 w;    (* [~1,~1,~1,~1,~1,~1,~1,~1,~1,~1] : int list *)
 *)
 
 structure Frame :>
@@ -434,7 +447,7 @@ struct
       end
 
   fun patternMatch pat dat frameOpt =
-      (log ("patternMatch: ~S ~S", [pat,dat]);
+      (log ("patternMatch: pat=~S dat=~S", [pat,dat]);
       case frameOpt of
         NONE => (log ("patternMatch: frameOpt is NONE",nil); NONE)
       | SOME frame =>
@@ -444,7 +457,7 @@ struct
           (log ("patternMatch: pat is var",nil);
            extendIfConsistent pat dat frame)
         else if Obj.isCons pat andalso Obj.isCons dat then
-          (log ("patternMatch: both pat and dat is cons",nil);
+          (log ("patternMatch: both pat and dat are cons",nil);
           patternMatch (Obj.cdr pat)
                        (Obj.cdr dat)
                        (patternMatch (Obj.car pat)
@@ -452,14 +465,14 @@ struct
                                      (SOME frame))
           )
         else
-          (log ("pat is NONE",nil); NONE)
+          (log ("patternMatch: pat is NONE",nil); NONE)
       )
 
   and extendIfConsistent var dat frame =
-      (log ("extendIfConsistent: ~S ~S", [var,dat]);
+      (log ("extendIfConsistent: var=~S dat=~S", [var,dat]);
       case Frame.bindingIn frame var of
         SOME (_, dat') =>
-        (log ("extendIfConsistent: binding found",nil);
+        (log ("extendIfConsistent: binding found: ~S", [dat']);
          patternMatch dat' dat (SOME frame))
       | NONE =>
         (log ("extendIfConsistent: binding not found",nil);
@@ -491,38 +504,50 @@ struct
   end
 
   fun unifyMatch p1 p2 frameOpt =
-      (log ("unifyMatch: ~S ~S", [p1,p2]);
+      (log ("unifyMatch: p1=~S p2=~S", [p1,p2]);
       case frameOpt of
-        NONE => NONE
+        NONE => (log ("unifyMatch: frameOpt is NONE",nil); NONE)
       | SOME frame =>
-        if Obj.equal (p1, p2) then SOME frame
+        if Obj.equal (p1, p2) then
+          (log ("unifyMatch: p1 = p2",nil); SOME frame)
         else if isVar p1 then
-          extendIfPossible p1 p2 frame
+          (log ("unifyMatch: p1 is var",nil);
+           extendIfPossible p1 p2 frame)
         else if isVar p2 then
-          extendIfPossible p2 p1 frame
+          (log ("unifyMatch: p2 is var",nil);
+           extendIfPossible p2 p1 frame)
         else if Obj.isCons p1 andalso Obj.isCons p2 then
+          (log ("unifyMatch: both p1 and p2 are cons",nil);
           unifyMatch (Obj.cdr p1)
                      (Obj.cdr p2)
                      (unifyMatch (Obj.car p1)
                                  (Obj.car p2)
                                  (SOME frame))
+          )
         else
-          NONE
+          (log ("unifyMatch: both p1 and p2 are NONE",nil); NONE)
       )
 
   and extendIfPossible var dat frame =
-      (log ("extendIfPossible: ~S ~S", [var,dat]);
+      (log ("extendIfPossible: var=~S dat=~S", [var,dat]);
       case Frame.bindingIn frame var of
-        SOME (_, dat') => unifyMatch dat' dat (SOME frame)
+        SOME (_, dat') =>
+        (log ("extendIfPossible: binding for var found: ~S", [dat']);
+         unifyMatch dat' dat (SOME frame))
       | NONE =>
         if isVar dat then
           case Frame.bindingIn frame dat of
-            SOME (_, dat') => unifyMatch var dat' (SOME frame)
-          | NONE => SOME (Frame.extend frame (var, dat))
+            SOME (_, dat') =>
+            (log ("extendIfPossible: binding for dat found: ~S", [dat']);
+             unifyMatch var dat' (SOME frame))
+          | NONE =>
+            (log ("extendIfPossible: binding for dat not found",nil);
+             SOME (Frame.extend frame (var, dat)))
         else if dependsOn dat var frame then
-          NONE
+          (log ("extendIfPossible: dat depends on var",nil); NONE)
         else
-          SOME (Frame.extend frame (var, dat))
+          (log ("extendIfPossible: binding for var not found",nil);
+           SOME (Frame.extend frame (var, dat)))
       )
 
   and dependsOn exp var frame =
