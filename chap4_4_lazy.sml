@@ -896,33 +896,6 @@ struct
                            nil))
       end
 
-  and onError (qrt:Q.qrt) =
-   fn (Obj.Error (ctrlstr,args), cont) =>
-      let
-        val lrt = #PRED_RUNTIME qrt
-        val msg = "Runtime error: " ^ ctrlstr ^ "~%"
-      in
-        LP.format (stdErr lrt, msg, args);
-        cont ()
-      end
-    | (IO.Io {name,function,cause}, cont) =>
-      let
-        val lrt = #PRED_RUNTIME qrt
-        val msg = "IO error: " ^ name ^ " -- " ^ function ^
-                  " (cause: " ^ exnMessage cause ^ ")~%"
-      in
-        LP.format (stdErr lrt, msg, nil);
-        cont ()
-      end
-    | (e, cont) =>
-      let
-        val lrt = #PRED_RUNTIME qrt
-        val msg = "Error: " ^ exnMessage e ^ "~%"
-      in
-        LP.format (stdErr lrt, msg, nil);
-        cont ()
-      end
-
   and repl (qrt:Q.qrt, prompt) =
       let
         val lrt = #PRED_RUNTIME qrt
@@ -972,7 +945,8 @@ struct
                             [count ()]);
                  loop ())
             end
-            handle e => onError qrt (e, loop)
+            handle e => (LP.printException (stdErr lrt, e);
+                         loop ())
       in
         loop ()
       end

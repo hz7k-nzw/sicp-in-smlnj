@@ -320,30 +320,6 @@ struct
                               "Bye!~%",
                               nil))
 
-  and onError rt =
-   fn (Obj.Error (ctrlstr,args), cont) =>
-      let
-        val msg = "Runtime error: " ^ ctrlstr ^ "~%"
-      in
-        Printer.format (stdErr rt, msg, args);
-        cont ()
-      end
-    | (IO.Io {name,function,cause}, cont) =>
-      let
-        val msg = "IO error: " ^ name ^ " -- " ^ function ^
-                  " (cause: " ^ exnMessage cause ^ ")~%"
-      in
-        Printer.format (stdErr rt, msg, nil);
-        cont ()
-      end
-    | (e, cont) =>
-      let
-        val msg = "Error: " ^ exnMessage e ^ "~%"
-      in
-        Printer.format (stdErr rt, msg, nil);
-        cont ()
-      end
-
   and repl (rt, prompt) =
       let
         fun toSuccessCont p = Obj.subr2 ("succeed", p)
@@ -401,7 +377,8 @@ struct
             in
               loop' noCurrentProblem
             end
-            handle e => onError rt (e, loop)
+            handle e => (Printer.printException (stdErr rt, e);
+                         loop ())
       in
         loop ()
       end

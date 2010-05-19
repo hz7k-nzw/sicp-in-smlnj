@@ -249,6 +249,7 @@ sig
   val terpri : obj -> obj
   val flush : obj -> obj
   val format : obj * string * obj list -> obj
+  val printException : obj * exn -> obj
 end;
 
 signature ENV =
@@ -823,6 +824,29 @@ struct
             (terpri os; traverse (fs, args))
       in
         traverse (parse ss, args);
+        Obj.undef
+      end
+
+  fun printException (os, Obj.Error (ctrlstr,args)) =
+      let
+        val msg = "Runtime error: " ^ ctrlstr ^ "~%"
+      in
+        format (os, msg, args);
+        Obj.undef
+      end
+    | printException (os, IO.Io {name,function,cause}) =
+      let
+        val msg = "IO error: " ^ name ^ " -- " ^ function ^
+                  " (cause: " ^ exnMessage cause ^ ")~%"
+      in
+        format (os, msg, nil);
+        Obj.undef
+      end
+    | printException (os, e) =
+      let
+        val msg = "Runtime Error: " ^ exnMessage e ^ "~%"
+      in
+        format (os, msg, nil);
         Obj.undef
       end
 end;
@@ -2375,30 +2399,6 @@ struct
                               "Bye!~%",
                               nil))
 
-  and onError rt =
-   fn (Obj.Error (ctrlstr,args), cont) =>
-      let
-        val msg = "Runtime error: " ^ ctrlstr ^ "~%"
-      in
-        Printer.format (stdErr rt, msg, args);
-        cont ()
-      end
-    | (IO.Io {name,function,cause}, cont) =>
-      let
-        val msg = "IO error: " ^ name ^ " -- " ^ function ^
-                  " (cause: " ^ exnMessage cause ^ ")~%"
-      in
-        Printer.format (stdErr rt, msg, nil);
-        cont ()
-      end
-    | (e, cont) =>
-      let
-        val msg = "Error: " ^ exnMessage e ^ "~%"
-      in
-        Printer.format (stdErr rt, msg, nil);
-        cont ()
-      end
-
   and repl (rt, prompt) =
       let
         fun loop () =
@@ -2416,7 +2416,8 @@ struct
                   loop ()
                 end
             end
-            handle e => onError rt (e, loop)
+            handle e => (Printer.printException (stdErr rt, e);
+                         loop ())
       in
         loop ()
       end
@@ -2479,7 +2480,7 @@ struct
         val ut = ut rt
       in
         List.app ut tests
-        handle e => onError rt (e, fn () => ())
+        handle e => ignore (Printer.printException (stdErr rt, e))
       end
 
   and test () =
