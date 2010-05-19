@@ -2442,7 +2442,7 @@ struct
       let
         val rt = makeRuntime ()
       in
-        (hello rt; repl (rt,"~%> "); bye rt)
+        hello rt; repl (rt,"~%> "); bye rt
       end
 
   and ut rt =

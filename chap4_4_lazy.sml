@@ -907,8 +907,6 @@ struct
             let
               val obj = (LP.format (stdOut lrt, prompt, nil);
                          (Q.querySyntaxProcess o LR.read) (stdIn lrt))
-              val frameStream = Stream.singleton (Q.makeNewFrame ())
-              fun handler exp frame = Q.contractQuestionMark exp
             in
               if Obj.isEof obj orelse Obj.eq (obj, quit) then
                 ()
@@ -934,16 +932,21 @@ struct
                   loop ()
                 end
               else
-                (reset ();
-                 Stream.app
-                    (fn exp => (inc ();
-                                LP.format (stdOut lrt, "~S~%", [exp])))
-                    (Stream.map
-                         (fn frame => Q.instantiate obj frame handler)
-                         (QE.eval qrt obj frameStream));
-                 LP.format (stdOut lrt, "Query: ~S result(s) found.~%",
-                            [count ()]);
-                 loop ())
+                let
+                  val frameStream = Stream.singleton (Q.makeNewFrame ())
+                  fun handler exp frame = Q.contractQuestionMark exp
+                in
+                  reset ();
+                  Stream.app
+                      (fn exp => (inc ();
+                                  LP.format (stdOut lrt, "~S~%", [exp])))
+                      (Stream.map
+                           (fn frame => Q.instantiate obj frame handler)
+                           (QE.eval qrt obj frameStream));
+                  LP.format (stdOut lrt, "Query: ~S result(s) found.~%",
+                             [count ()]);
+                  loop ()
+                end
             end
             handle e => (LP.printException (stdErr lrt, e);
                          loop ())
@@ -972,7 +975,7 @@ struct
       let
         val qrt = makeRuntime ()
       in
-        (hello qrt; repl (qrt,"~%> "); bye qrt)
+        hello qrt; repl (qrt,"~%> "); bye qrt
       end
 end;
 
