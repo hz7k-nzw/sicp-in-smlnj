@@ -435,10 +435,6 @@ struct
       U.log "Not supported: printStats"
 end;
 
-(*
- * testGcd (206,40);
- *)
-
 (* 5.2.4  Monitoring Machine Performance *)
 
 structure Stack' :> STACK =
