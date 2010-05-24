@@ -57,8 +57,16 @@ Currently, the following sections are translated:
     (The lazy evaluation feature of SML/NJ is used.)
 
 5  Computing with Register Machines
-=> not translated yet
-
+ 5.1  Designing Register Machines
+ => chap5_1.sml
+ 5.2  A Register-Machine Simulator
+ => chap5_2.sml
+ 5.3  Storage Allocation and Garbage Collection
+ => not translated yet
+ 5.4  The Explicit-Control Evaluator
+ => not translated yet
+ 5.5  Compilation
+ => not translated yet
 
 === References and links
 
