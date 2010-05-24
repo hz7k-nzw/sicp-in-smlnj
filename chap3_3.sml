@@ -593,22 +593,6 @@ T.lookup t ["math","arith","*"];
 
 (* 3.3.4  A Simulator for Digital Circuits *)
 
-signature DIGITAL_CIRCUIT =
-sig
-  type time
-  type wire
-
-  val inverterDelay : time
-  val andGateDelay : time
-  val orGateDelay : time
-  val inverter : wire * wire -> unit
-  val andGate : wire * wire * wire -> unit
-  val orGate : wire * wire * wire -> unit
-  val halfAdder : wire * wire * wire * wire -> unit
-  val fullAdder : wire * wire * wire * wire * wire -> unit
-  val rippleCarryAdder : wire list * wire list * wire list * wire -> unit
-end;
-
 structure Time =
 struct
   type t = int
@@ -651,6 +635,21 @@ struct
     | toInt F = 0
 end;
 
+signature DIGITAL_CIRCUIT =
+sig
+  type wire
+
+  val inverterDelay : Time.t
+  val andGateDelay : Time.t
+  val orGateDelay : Time.t
+  val inverter : wire * wire -> unit
+  val andGate : wire * wire * wire -> unit
+  val orGate : wire * wire * wire -> unit
+  val halfAdder : wire * wire * wire * wire -> unit
+  val fullAdder : wire * wire * wire * wire * wire -> unit
+  val rippleCarryAdder : wire list * wire list * wire list * wire -> unit
+end;
+
 signature WIRE =
 sig
   type t
@@ -666,7 +665,6 @@ end;
 
 functor DigitalCircuitFn (W : WIRE) : DIGITAL_CIRCUIT =
 struct
-  type time = Time.t
   type wire = W.t
 
   val inverterDelay = 2
