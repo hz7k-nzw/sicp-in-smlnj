@@ -2,7 +2,7 @@
  * SICP in SML/NJ
  * by Kenji Nozawa (hz7k-nzw@asahi-net.or.jp)
  *
- * Dependency: util.sml, chap1_2.sml, chap4_1.sml;
+ * Dependency: util.sml, chap4_1.sml;
  *
  * Notice: the following code requires the lazy evaluation,
  * which is a non-standard feature of ML provided by SML/NJ.
