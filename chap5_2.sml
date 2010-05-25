@@ -87,7 +87,7 @@ sig
   val printStats : 'a t -> unit
 end;
 
-signature REGISTER_MACHINE_SPEC =
+signature REGISTER_MACHINE_CONF =
 sig
   (* sub structure: register *)
   structure Register : REGISTER
@@ -101,10 +101,10 @@ sig
   val isTrue : value -> bool
 end;
 
-functor RegisterMachineFn (Spec: REGISTER_MACHINE_SPEC)
+functor RegisterMachineFn (Conf: REGISTER_MACHINE_CONF)
         : REGISTER_MACHINE =
 struct
-  open Spec
+  open Conf
 
   (* type of operator *)
   type ope = value list -> value

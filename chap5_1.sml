@@ -54,7 +54,7 @@ local
 
   (* Register, Stack, and RegisterMachineFn => included in chap5_2.sml *)
 
-  structure Spec =
+  structure Conf =
   struct
     structure Register = Register
     (*structure Stack = Stack*)
@@ -64,7 +64,7 @@ local
     val isTrue = fn n => not (n = 0)
   end
 
-  structure M = RegisterMachineFn (Spec)
+  structure M = RegisterMachineFn (Conf)
 
   open M
 in
