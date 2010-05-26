@@ -242,6 +242,13 @@ struct
              AssignOp ("argl", "adjoin-arg", [R "val", R "argl"]),
              AssignOp ("unev", "rest-operands", [R "unev"]),
              Goto (L "ev-appl-operand-loop"),
+             (*
+              * from http://aggregate.org/LAR/p163-steele.pdf;
+              * ... Wand has observed that a lexically scoped LISP evaluator
+              * need never save the environment over the evaluation of the
+              * last argument in a procedure call (see [Wand]); this is called
+              * "evils tail-recursion".
+              *)
              Label "ev-appl-last-arg",
              Assign ("continue", L "ev-appl-accum-last-arg"),
              Goto (L "eval-dispatch"),
@@ -287,6 +294,14 @@ struct
              Restore "unev",
              AssignOp ("unev", "rest-exps", [R "unev"]),
              Goto (L "ev-sequence"),
+             (*
+              * from "5.4.2 Sequence Evaluation and Tail Recursion" of SICP;
+              * ... Rather than setting up continue to arrange for eval-dispatch
+              * to return here and then restoring continue from the stack and
+              * continuing at that entry point, we restore continue from the
+              * stack before going to eval-dispatch, so that eval-dispatch will
+              * continue at that entry point after evaluating the expression.
+              *)
              Label "ev-sequence-last-exp",
              Restore "continue",
              Goto (L "eval-dispatch"),
