@@ -62,9 +62,9 @@ Currently, the following sections are translated:
  5.2  A Register-Machine Simulator
  => chap5_2.sml
  5.3  Storage Allocation and Garbage Collection
- => not translated yet
+ => not translated
  5.4  The Explicit-Control Evaluator
- => not translated yet
+ => chap5_4.sml
  5.5  Compilation
  => not translated yet
 
