@@ -13,46 +13,42 @@ structure R = Util.Real;
 (* 5.1  Designing Register Machines *)
 
 local
-  (* primitive operators *)
+  (* Ope, Register, Stack, RegisterMachineFn => included in chap5_2.sml *)
 
-  val opeAdd : int list -> int
-    = (fn [n1,n2] => n1 + n2
-        | _ => raise Fail "Unexpected arguments: +")
-
-  val opeSub : int list -> int
-    = (fn [n1,n2] => n1 - n2
-        | _ => raise Fail "Unexpected arguments: -")
-
-  val opeMul : int list -> int
-    = (fn [n1,n2] => n1 * n2
-        | _ => raise Fail "Unexpected arguments: *")
-
-  val opeRem : int list -> int
-    = (fn [n1,n2] => n1 mod n2
-        | _ => raise Fail "Unexpected arguments: rem")
-
-  val opeEq : int list -> int
-    = (fn [n1,n2] => if n1 = n2 then 1 else 0
-        | _ => raise Fail "Unexpected arguments: =")
-
-  val opeLt : int list -> int
-    = (fn [n1,n2] => if n1 < n2 then 1 else 0
-        | _ => raise Fail "Unexpected arguments: <")
-
-  val opeRead : int list -> int
-    = (fn [] => (print "input: ";
-                 (case TextIO.scanStream
-                           (Int.scan StringCvt.DEC)
-                           TextIO.stdIn of
-                    SOME i => i
-                  | NONE => raise Fail "Cannot read int"))
-        | _ => raise Fail "Unexpected arguments: read")
-
-  val opePrint : int list -> int
-    = (fn [n] => (print ("output: " ^ Int.toString n ^ "\n"); n)
-        | _ => raise Fail "Unexpected arguments: print")
-
-  (* Register, Stack, and RegisterMachineFn => included in chap5_2.sml *)
+  val opeAdd = Ope.fromFn2 ("+", op + )
+  val opeSub = Ope.fromFn2 ("-", op - )
+  val opeMul = Ope.fromFn2 ("*", op * )
+  val opeRem = Ope.fromFn2 ("rem", op mod)
+  val opeEq =
+      let
+        fun f (n1:int,n2:int) = if n1 = n2 then 1 else 0
+      in
+        Ope.fromFn2 ("=", f)
+      end
+  val opeLt =
+      let
+        fun f (n1:int,n2:int) = if n1 < n2 then 1 else 0
+      in
+        Ope.fromFn2 ("<", f)
+      end
+  val opeRead =
+      let
+        fun f () =
+            (print "input: ";
+             case TextIO.scanStream (Int.scan StringCvt.DEC)
+                                     TextIO.stdIn of
+                SOME i => i
+              | NONE => raise Fail "Cannot read int")
+      in
+        Ope.fromFn0 ("read", f)
+      end
+  val opePrint =
+      let
+        fun f n =
+            (print ("output: " ^ Int.toString n ^ "\n"); n)
+      in
+        Ope.fromFn1 ("print", f)
+      end
 
   structure Conf =
   struct
@@ -76,7 +72,7 @@ fun calcGcd (a, b) =
       val m = make ((* registers *)
                     ["a","b","t"],
                     (* ops *)
-                    [("rem", opeRem), ("=", opeEq)],
+                    [opeRem, opeEq],
                     (* controller-text *)
                     [Label "test-b",
                      Test ("=", [R "b", C 0]),
@@ -99,8 +95,7 @@ fun calcGcd' () =
       val m = make ((* registers *)
                     ["a","b","t"],
                     (* ops *)
-                    [("rem", opeRem), ("=", opeEq),
-                     ("read", opeRead), ("print", opePrint)],
+                    [opeRem, opeEq, opeRead, opePrint],
                     (* controller-text *)
                     [Label "gcd-loop",
                      AssignOp ("a", "read", []),
@@ -127,7 +122,7 @@ fun calcGcd'' (a, b) =
       val m = make ((* registers *)
                     ["a","b","t"],
                     (* ops *)
-                    [("-", opeSub), ("=", opeEq), ("<", opeLt)],
+                    [opeSub, opeEq, opeLt],
                     (* controller-text *)
                     [Label "test-b",
                      Test ("=", [R "b", C 0]),
@@ -158,8 +153,7 @@ fun calcGcd''' () =
       val m = make ((* registers *)
                     ["a","b","t","continue"],
                     (* ops *)
-                    [("rem", opeRem), ("=", opeEq),
-                     ("read", opeRead), ("print", opePrint)],
+                    [opeRem, opeEq, opeRead, opePrint],
                     (* controller-text *)
                     [Label "main",
                      (* call-gcd-1 *)
@@ -199,7 +193,7 @@ fun calcFact n =
       val m = make ((* registers *)
                     ["n","val","continue"],
                     (* ops *)
-                    [("-", opeSub), ("*", opeMul), ("=", opeEq)],
+                    [opeSub, opeMul, opeEq],
                     (* controller-text *)
                     [(* set up final return address *)
                      Assign ("continue", L "fact-done"),
@@ -239,8 +233,7 @@ fun calcFib n =
       val m = make ((* registers *)
                     ["n","val","continue"],
                     (* ops *)
-                    [("+", opeAdd), ("-", opeSub),
-                     ("=", opeEq), ("<", opeLt)],
+                    [opeAdd, opeSub, opeEq, opeLt],
                     (* controller-text *)
                     [(* set up final return address *)
                      Assign ("continue", L "fib-done"),

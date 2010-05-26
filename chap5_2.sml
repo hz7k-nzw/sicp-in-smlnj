@@ -403,6 +403,42 @@ struct
         end
 end;
 
+structure Ope =
+struct
+  fun fromFn0 (name: string, f: unit -> 'a)
+      : string * ('a list -> 'a) =
+      let
+        fun ope [] = f ()
+          | ope _ = raise Fail ("Unexpected arguments: "^name)
+      in
+        (name, ope)
+      end
+  fun fromFn1 (name: string, f: 'a -> 'a)
+      : string * ('a list -> 'a) =
+      let
+        fun ope [n1] = f n1
+          | ope _ = raise Fail ("Unexpected arguments: "^name)
+      in
+        (name, ope)
+      end
+  fun fromFn2 (name:string, f: 'a * 'a -> 'a)
+      : string * ('a list -> 'a) =
+      let
+        fun ope [n1,n2] = f (n1,n2)
+          | ope _ = raise Fail ("Unexpected arguments: "^name)
+      in
+        (name, ope)
+      end
+  fun fromFn3 (name:string, f: 'a * 'a * 'a -> 'a)
+      : string * ('a list -> 'a) =
+      let
+        fun ope [n1,n2,n3] = f (n1,n2,n3)
+          | ope _ = raise Fail ("Unexpected arguments: "^name)
+      in
+        (name, ope)
+      end
+end;
+
 structure Register :> REGISTER =
 struct
   type 'a t = string * 'a option ref
