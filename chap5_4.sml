@@ -142,7 +142,11 @@ struct
        Ope.fromFn2 ("eq?",
                     Obj.bool o Obj.eq),
        Ope.fromFn2 ("equal?",
-                    Obj.bool o Obj.equal)]
+                    Obj.bool o Obj.equal),
+       Ope.fromFn1 ("derived?",       (* for Exercise 5.23 *)
+                    Obj.bool o Syntax.isDerived),
+       Ope.fromFn1 ("expand-derived", (* for Exercise 5.23 *)
+                    Syntax.expandDerived)]
 
   (* control-text *)
   val ctrls =
@@ -166,6 +170,8 @@ struct
        Branch (L "ev-lambda"),
        Test ("begin?", [R "exp"]),
        Branch (L "ev-begin"),
+       Test ("derived?", [R "exp"]), (* for Exercise 5.23 *)
+       Branch (L "ev-derived"),      (* for Exercise 5.23 *)
        Test ("application?", [R "exp"]),
        Branch (L "ev-application"),
        Goto (L "unknown-expression-type"),
@@ -334,7 +340,11 @@ struct
        Perform ("define-variable!", [R "unev", R "val", R "env"]),
        Assign ("val", C Obj.undef),
        Goto (R "continue"),
-       (* Read-Eval-Print-Loop*)
+       (* Derived expressions: for Exercise 5.23 *)
+       Label "ev-derived",
+       AssignOp ("exp", "expand-derived", [R "exp"]),
+       Goto (L "eval-dispatch"),
+       (* Read-Eval-Print-Loop and error handlers *)
        Label "read-eval-print-loop",
        Perform ("initialize-stack", []),
        Perform ("prompt-for-input", [C inputPrompt]),
