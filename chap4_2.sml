@@ -211,9 +211,9 @@ local
       = LazyEvaluatorFn (structure Obj = Obj and Syntax = Syntax
                          val log = log)
   end
-  structure Runtime = LispRuntimeFn (Lisp)
 in
-structure LI'' = LispInterpreterFn (Runtime)
+structure LazyLispRuntime = LispRuntimeFn (Lisp)
+structure LI'' = LispInterpreterFn (LazyLispRuntime)
 end;
 
 (*

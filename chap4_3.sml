@@ -421,9 +421,9 @@ local
     structure Evaluator
       = AmbEvaluatorFn (structure Obj = Obj and Syntax = Syntax)
   end
-  structure Runtime = LispRuntimeFn (Lisp)
 in
-structure AI = AmbInterpreterFn (Runtime)
+structure AmbLispRuntime = LispRuntimeFn (Lisp)
+structure AI = AmbInterpreterFn (AmbLispRuntime)
 end;
 
 (*

@@ -268,7 +268,7 @@ sig
                    -> (obj,obj) Frame.t option
 
   (* for others *)
-  val makeRuntime : unit -> qrt
+  val makeQueryRuntime : unit -> qrt
   val makeNewFrame : unit -> (obj,obj) Frame.t
   val executePredicate : qrt -> obj -> bool
   val error : string * obj list -> 'a
@@ -572,7 +572,7 @@ struct
   fun tableEq ((x1,y1),(x2,y2)) =
       Obj.eq (x1,x2) andalso Obj.eq (y1,y2)
 
-  fun makeRuntime () =
+  fun makeQueryRuntime () =
       {PRED_RUNTIME = LispRuntime.makeRuntime (),
        THE_ASSERTIONS = ref NULL_OBJ_STREAM,
        THE_RULES = ref NULL_OBJ_STREAM,
@@ -844,33 +844,27 @@ struct
       )
 end;
 
-functor QueryInterpreterFn (LispRuntime : LISP_RUNTIME)
-        : INTERPRETER =
+structure QueryInterpreter : INTERPRETER =
 struct
-  structure Obj = LispRuntime.Obj
-  structure LR = LispRuntime.Reader
-  structure LE = LispRuntime.Evaluator
-  structure LP = LispRuntime.Printer
-  structure Q = QueryFn (LispRuntime)
+  structure Q = QueryFn (DefaultLispRuntime)
   structure QDB = QueryDataBaseFn (structure Query = Q)
   structure QE = QueryEvaluatorFn (structure Query = Q and DataBase = QDB)
 
-  val stdIn = LispRuntime.stdIn
-  val stdOut = LispRuntime.stdOut
-  val stdErr = LispRuntime.stdErr
+  open DefaultLispRuntime
+
   val quit = Obj.sym ":q"
   val eval = Obj.sym ":e"
   val debug = Obj.sym ":d"
 
-  fun makeRuntime () =
+  fun makeQueryRuntime () =
       let
-        val qrt = Q.makeRuntime ()
+        val qrt = Q.makeQueryRuntime ()
         val lrt = #PRED_RUNTIME qrt
         (* load *)
         val fnLoad = (fn file => (load (qrt, Obj.toString file); Obj.undef))
         val subrLoad = Obj.subr1 ("load", fnLoad)
         val symLoad = Obj.sym (Obj.subrName subrLoad)
-        val _ = Obj.defineEnv (LispRuntime.env lrt) (symLoad, subrLoad)
+        val _ = Obj.defineEnv (env lrt) (symLoad, subrLoad)
       in
         qrt
       end
@@ -879,21 +873,21 @@ struct
       let
         val lrt = #PRED_RUNTIME qrt
       in
-        ignore (LP.format (stdOut lrt,
-                           "Hello!~%"^
-                           "Type '~S' to exit~%"^
-                           "Type '~S' to eval lisp expression~%"^
-                           "Type '~S' to toggle debug flag~%",
-                           [quit, eval, debug]))
+        ignore (Printer.format (stdOut lrt,
+                                "Hello!~%"^
+                                "Type '~S' to exit~%"^
+                                "Type '~S' to eval lisp expression~%"^
+                                "Type '~S' to toggle debug flag~%",
+                                [quit, eval, debug]))
       end
 
   and bye (qrt:Q.qrt) =
       let
         val lrt = #PRED_RUNTIME qrt
       in
-        ignore (LP.format (stdOut lrt,
-                           "Bye!~%",
-                           nil))
+        ignore (Printer.format (stdOut lrt,
+                                "Bye!~%",
+                                nil))
       end
 
   and repl (qrt:Q.qrt, prompt) =
@@ -905,30 +899,30 @@ struct
         fun reset () = counter := 0
         fun loop () =
             let
-              val obj = (LP.format (stdOut lrt, prompt, nil);
-                         (Q.querySyntaxProcess o LR.read) (stdIn lrt))
+              val obj = (Printer.format (stdOut lrt, prompt, nil);
+                         (Q.querySyntaxProcess o Reader.read) (stdIn lrt))
             in
               if Obj.isEof obj orelse Obj.eq (obj, quit) then
                 ()
               else if Obj.eq (obj, eval) then (* eval lisp exp *)
                 let
-                  val obj' = LR.read (stdIn lrt)
-                  val obj'' = LE.eval obj' (LispRuntime.env lrt)
+                  val obj' = Reader.read (stdIn lrt)
+                  val obj'' = Evaluator.eval obj' (env lrt)
                 in
-                  LP.format (stdOut lrt, "Eval: ~S.~%", [obj'']);
+                  Printer.format (stdOut lrt, "Eval: ~S.~%", [obj'']);
                   loop ()
                 end
               else if Obj.eq (obj, debug) then (* toggle debug flag *)
                 (Q.debug := not (!Q.debug);
-                 LP.format (stdOut lrt, "Debug: ~S.~%",
-                            [Obj.bool (!Q.debug)]);
+                 Printer.format (stdOut lrt, "Debug: ~S.~%",
+                                 [Obj.bool (!Q.debug)]);
                  loop ())
               else if Q.isAssertionToBeAdded obj then
                 let
                   val body = Q.addAssertionBody obj
                 in
                   QDB.addRuleOrAssertion qrt body;
-                  LP.format (stdOut lrt, "Added to DB: ~S.~%", [body]);
+                  Printer.format (stdOut lrt, "Added to DB: ~S.~%", [body]);
                   loop ()
                 end
               else
@@ -939,16 +933,16 @@ struct
                   reset ();
                   Stream.app
                       (fn exp => (inc ();
-                                  LP.format (stdOut lrt, "~S~%", [exp])))
+                                  Printer.format (stdOut lrt, "~S~%", [exp])))
                       (Stream.map
                            (fn frame => Q.instantiate obj frame handler)
                            (QE.eval qrt obj frameStream));
-                  LP.format (stdOut lrt, "Query: ~S result(s) found.~%",
-                             [count ()]);
+                  Printer.format (stdOut lrt, "Query: ~S result(s) found.~%",
+                                  [count ()]);
                   loop ()
                 end
             end
-            handle e => (LP.printException (stdErr lrt, e);
+            handle e => (Printer.printException (stdErr lrt, e);
                          loop ())
       in
         loop ()
@@ -961,42 +955,25 @@ struct
         fun body () =
             let
               val newIn = Obj.openIn file
-              fun body' () = (LispRuntime.setStdIn lrt newIn; repl (qrt,"~%"))
+              fun body' () = (setStdIn lrt newIn; repl (qrt,"~%"))
               fun cleanup' () = ignore (Obj.closeIn newIn)
             in
               U.unwindProtect body' cleanup'
             end
-        fun cleanup () = LispRuntime.setStdIn lrt oldIn
+        fun cleanup () = setStdIn lrt oldIn
       in
         U.unwindProtect body cleanup
       end
 
   and go () =
       let
-        val qrt = makeRuntime ()
+        val qrt = makeQueryRuntime ()
       in
         hello qrt; repl (qrt,"~%> "); bye qrt
       end
 end;
 
-local
-  structure Lisp : LISP =
-  struct
-    structure Obj
-      = LispObjectFn (structure Env = Env)
-    structure Syntax
-      = LispSyntaxFn (structure Obj = Obj)
-    structure Reader
-      = LispReaderFn (structure Obj = Obj and Syntax = Syntax)
-    structure Printer
-      = LispPrinterFn (structure Obj = Obj and Syntax = Syntax)
-    structure Evaluator
-      = LispEvaluatorFn (structure Obj = Obj and Syntax = Syntax)
-  end
-  structure Runtime = LispRuntimeFn (Lisp)
-in
-structure QI = QueryInterpreterFn (Runtime)
-end;
+structure QI = QueryInterpreter;
 
 (*
  * QI.go (); (* => activates top-level *)

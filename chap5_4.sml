@@ -32,25 +32,7 @@ end;
 
 structure LispRegisterMachine : LISP_REGISTER_MACHINE =
 struct
-  local
-    structure Lisp : LISP =
-    struct
-      structure Obj
-        = LispObjectFn (structure Env = Env)
-      structure Syntax
-        = LispSyntaxFn (structure Obj = Obj)
-      structure Reader
-        = LispReaderFn (structure Obj = Obj and Syntax = Syntax)
-      structure Printer
-        = LispPrinterFn (structure Obj = Obj and Syntax = Syntax)
-      structure Evaluator
-        = LispEvaluatorFn (structure Obj = Obj and Syntax = Syntax)
-    end
-  in
-  structure LispRuntime = LispRuntimeFn (Lisp)
-  end
-
-  open LispRuntime
+  open DefaultLispRuntime
 
   local
     structure Conf : REGISTER_MACHINE_CONF =

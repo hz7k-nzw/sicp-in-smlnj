@@ -2643,9 +2643,9 @@ local
     structure Evaluator
       = LispEvaluatorFn (structure Obj = Obj and Syntax = Syntax)
   end
-  structure Runtime = LispRuntimeFn (Lisp)
 in
-structure LI = LispInterpreterFn (Runtime)
+structure DefaultLispRuntime = LispRuntimeFn (Lisp)
+structure LI = LispInterpreterFn (DefaultLispRuntime)
 end;
 
 (*
@@ -2818,9 +2818,9 @@ local
     structure Evaluator
       = AnalyzingEvaluatorFn (structure Obj = Obj and Syntax = Syntax)
   end
-  structure Runtime = LispRuntimeFn (Lisp)
 in
-structure LI' = LispInterpreterFn (Runtime)
+structure AnalyzingLispRuntime = LispRuntimeFn (Lisp)
+structure LI' = LispInterpreterFn (AnalyzingLispRuntime)
 end;
 
 (*
