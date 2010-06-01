@@ -13,44 +13,7 @@ structure R = Util.Real;
 (* 5.1  Designing Register Machines *)
 
 local
-  (* Ope, Register, Stack, RegisterMachineFn => included in chap5_2.sml *)
-
-  val opeAdd = Ope.fromFn2 ("+", op + )
-  val opeSub = Ope.fromFn2 ("-", op - )
-  val opeMul = Ope.fromFn2 ("*", op * )
-  val opeRem = Ope.fromFn2 ("rem", op mod)
-  val opeEq =
-      let
-        fun f (n1:int,n2:int) = if n1 = n2 then 1 else 0
-      in
-        Ope.fromFn2 ("=", f)
-      end
-  val opeLt =
-      let
-        fun f (n1:int,n2:int) = if n1 < n2 then 1 else 0
-      in
-        Ope.fromFn2 ("<", f)
-      end
-  val opeRead =
-      let
-        fun f () =
-            (print "input: ";
-             case TextIO.scanStream (Int.scan StringCvt.DEC)
-                                     TextIO.stdIn of
-                SOME i => i
-              | NONE => raise Fail "Cannot read int")
-      in
-        Ope.fromFn0 ("read", f)
-      end
-  val opePrint =
-      let
-        fun f n =
-            (print ("output: " ^ Int.toString n ^ "\n"); n)
-      in
-        Ope.fromFn1 ("print", f)
-      end
-
-  structure Conf =
+  structure Conf : REGISTER_MACHINE_CONF =
   struct
     structure Register = Register
     (*structure Stack = Stack*)
@@ -58,60 +21,102 @@ local
     type value = int
     val undef = 0
     val isTrue = fn n => not (n = 0)
+    val printValue = fn (s, v) => TextIO.output (s, Int.toString v)
   end
 
   structure M = RegisterMachineFn (Conf)
 
-  open M
+  (* Register, Stack, RegisterMachineFn => included in chap5_2.sml *)
+
+  val opeAdd = M.fromFn2 ("+", op + )
+  val opeSub = M.fromFn2 ("-", op - )
+  val opeMul = M.fromFn2 ("*", op * )
+  val opeRem = M.fromFn2 ("rem", op mod)
+  val opeEq =
+      let
+        fun f (n1:int,n2:int) = if n1 = n2 then 1 else 0
+      in
+        M.fromFn2 ("=", f)
+      end
+  val opeLt =
+      let
+        fun f (n1:int,n2:int) = if n1 < n2 then 1 else 0
+      in
+        M.fromFn2 ("<", f)
+      end
+  val opeRead =
+      let
+        fun f () =
+            (print "input: ";
+             case TextIO.scanStream (Int.scan StringCvt.DEC)
+                                    TextIO.stdIn of
+               SOME i => i
+             | NONE => raise Fail "Cannot read int")
+      in
+        M.fromFn0 ("read", f)
+      end
+  val opePrint =
+      let
+        fun f n =
+            (print ("output: " ^ Int.toString n ^ "\n"); n)
+      in
+        M.fromFn1 ("print", f)
+      end
 in
 (* 5.1.1  A Language for Describing Register Machines *)
 
 (* The GCD machine *)
 fun calcGcd (a, b) =
     let
-      val m = make ((* registers *)
-                    ["a","b","t"],
-                    (* ops *)
-                    [opeRem, opeEq],
-                    (* controller-text *)
-                    [Label "test-b",
-                     Test ("=", [R "b", C 0]),
-                     Branch (L "gcd-done"),
-                     AssignOp ("t", "rem", [R "a", R "b"]),
-                     Assign ("a", R "b"),
-                     Assign ("b", R "t"),
-                     Goto (L "test-b"),
-                     Label "gcd-done"])
+      (* registers *)
+      val regs = ["a","b","t"]
+      (* operators *)
+      val ops = [opeRem, opeEq]
+      (* controller-text *)
+      val ctrls =
+          [M.Label "test-b",
+           M.Test ("=", [M.R "b", M.C 0]),
+           M.Branch (M.L "gcd-done"),
+           M.AssignOp ("t", "rem", [M.R "a", M.R "b"]),
+           M.Assign ("a", M.R "b"),
+           M.Assign ("b", M.R "t"),
+           M.Goto (M.L "test-b"),
+           M.Label "gcd-done"]
+      (* machine model *)
+      val m = M.makeMachine (regs, ops, ctrls)
     in
-      setRegisterContents m "a" a;
-      setRegisterContents m "b" b;
-      start m;
-      getRegisterContents m "a"
+      M.setRegisterContents m "a" (M.Value a);
+      M.setRegisterContents m "b" (M.Value b);
+      M.start m;
+      M.getRegisterContents m "a"
     end
 
 (* The GCD machine that reads inputs and prints results *)
 fun calcGcd' () =
     let
-      val m = make ((* registers *)
-                    ["a","b","t"],
-                    (* ops *)
-                    [opeRem, opeEq, opeRead, opePrint],
-                    (* controller-text *)
-                    [Label "gcd-loop",
-                     AssignOp ("a", "read", []),
-                     AssignOp ("b", "read", []),
-                     Label "test-b",
-                     Test ("=", [R "b", C 0]),
-                     Branch (L "gcd-done"),
-                     AssignOp ("t", "rem", [R "a", R "b"]),
-                     Assign ("a", R "b"),
-                     Assign ("b", R "t"),
-                     Goto (L "test-b"),
-                     Label "gcd-done",
-                     Perform ("print", [R "a"]),
-                     Goto (L "gcd-loop")])
+      (* registers *)
+      val regs = ["a","b","t"]
+      (* operators *)
+      val ops = [opeRem, opeEq, opeRead, opePrint]
+      (* controller-text *)
+      val ctrls =
+          [M.Label "gcd-loop",
+           M.AssignOp ("a", "read", []),
+           M.AssignOp ("b", "read", []),
+           M.Label "test-b",
+           M.Test ("=", [M.R "b", M.C 0]),
+           M.Branch (M.L "gcd-done"),
+           M.AssignOp ("t", "rem", [M.R "a", M.R "b"]),
+           M.Assign ("a", M.R "b"),
+           M.Assign ("b", M.R "t"),
+           M.Goto (M.L "test-b"),
+           M.Label "gcd-done",
+           M.Perform ("print", [M.R "a"]),
+           M.Goto (M.L "gcd-loop")]
+      (* machine model *)
+      val m = M.makeMachine (regs, ops, ctrls)
     in
-      start m
+      M.start m
     end
 
 (* 5.1.2  Abstraction in Machine Design *)
@@ -119,30 +124,33 @@ fun calcGcd' () =
 (* The elabolated GCD machine *)
 fun calcGcd'' (a, b) =
     let
-      val m = make ((* registers *)
-                    ["a","b","t"],
-                    (* ops *)
-                    [opeSub, opeEq, opeLt],
-                    (* controller-text *)
-                    [Label "test-b",
-                     Test ("=", [R "b", C 0]),
-                     Branch (L "gcd-done"),
-                     Assign ("t", R "a"),
-                     Label "rem-loop",
-                     Test ("<", [R "t", R "b"]),
-                     Branch (L "rem-done"),
-                     AssignOp ("t", "-", [R "t", R "b"]),
-                     Goto (L "rem-loop"),
-                     Label "rem-done",
-                     Assign ("a", R "b"),
-                     Assign ("b", R "t"),
-                     Goto (L "test-b"),
-                     Label "gcd-done"])
+      (* registers *)
+      val regs = ["a","b","t"]
+      (* operators *)
+      val ops = [opeSub, opeEq, opeLt]
+      (* controller-text *)
+      val ctrls =
+          [M.Label "test-b",
+           M.Test ("=", [M.R "b", M.C 0]),
+           M.Branch (M.L "gcd-done"),
+           M.Assign ("t", M.R "a"),
+           M.Label "rem-loop",
+           M.Test ("<", [M.R "t", M.R "b"]),
+           M.Branch (M.L "rem-done"),
+           M.AssignOp ("t", "-", [M.R "t", M.R "b"]),
+           M.Goto (M.L "rem-loop"),
+           M.Label "rem-done",
+           M.Assign ("a", M.R "b"),
+           M.Assign ("b", M.R "t"),
+           M.Goto (M.L "test-b"),
+           M.Label "gcd-done"]
+      (* machine model *)
+      val m = M.makeMachine (regs, ops, ctrls)
     in
-      setRegisterContents m "a" a;
-      setRegisterContents m "b" b;
-      start m;
-      getRegisterContents m "a"
+      M.setRegisterContents m "a" (M.Value a);
+      M.setRegisterContents m "b" (M.Value b);
+      M.start m;
+      M.getRegisterContents m "a"
     end
 
 (* 5.1.3  Subroutines *)
@@ -150,138 +158,145 @@ fun calcGcd'' (a, b) =
 (* The GCD machine with subroutine *)
 fun calcGcd''' () =
     let
-      val m = make ((* registers *)
-                    ["a","b","t","continue"],
-                    (* ops *)
-                    [opeRem, opeEq, opeRead, opePrint],
-                    (* controller-text *)
-                    [Label "main",
-                     (* call-gcd-1 *)
-                     Assign ("continue", L "after-gcd-1"),
-                     Goto (L "gcd"),
-                     Label "after-gcd-1",
-                     (* call-gcd-2 *)
-                     Assign ("continue", L "after-gcd-2"),
-                     Goto (L "gcd"),
-                     Label "after-gcd-2",
-                     Goto (L "main-done"),
-                     (* gcd-subroutine *)
-                     Label "gcd",
-                     AssignOp ("a", "read", []),
-                     AssignOp ("b", "read", []),
-                     Label "test-b",
-                     Test ("=", [R "b", C 0]),
-                     Branch (L "gcd-done"),
-                     AssignOp ("t", "rem", [R "a", R "b"]),
-                     Assign ("a", R "b"),
-                     Assign ("b", R "t"),
-                     Goto (L "test-b"),
-                     Label "gcd-done",
-                     Perform ("print", [R "a"]),
-                     Goto (R "continue"),
-                     (* gcd-subroutine done *)
-                     Label "main-done"
-                   ])
+      (* registers *)
+      val regs = ["a","b","t","continue"]
+      (* ops *)
+      val ops = [opeRem, opeEq, opeRead, opePrint]
+      (* controller-text *)
+      val ctrls =
+          [M.Label "main",
+           (* call-gcd-1 *)
+           M.Assign ("continue", M.L "after-gcd-1"),
+           M.Goto (M.L "gcd"),
+           M.Label "after-gcd-1",
+           (* call-gcd-2 *)
+           M.Assign ("continue", M.L "after-gcd-2"),
+           M.Goto (M.L "gcd"),
+           M.Label "after-gcd-2",
+           M.Goto (M.L "main-done"),
+           (* gcd-subroutine *)
+           M.Label "gcd",
+           M.AssignOp ("a", "read", []),
+           M.AssignOp ("b", "read", []),
+           M.Label "test-b",
+           M.Test ("=", [M.R "b", M.C 0]),
+           M.Branch (M.L "gcd-done"),
+           M.AssignOp ("t", "rem", [M.R "a", M.R "b"]),
+           M.Assign ("a", M.R "b"),
+           M.Assign ("b", M.R "t"),
+           M.Goto (M.L "test-b"),
+           M.Label "gcd-done",
+           M.Perform ("print", [M.R "a"]),
+           M.Goto (M.R "continue"),
+           (* gcd-subroutine done *)
+           M.Label "main-done"]
+      (* machine model *)
+      val m = M.makeMachine (regs, ops, ctrls)
     in
-      start m
+      M.start m
     end
 
 (* 5.1.4  Using a Stack to Implement Recursion *)
 
 fun calcFact n =
     let
-      val m = make ((* registers *)
-                    ["n","val","continue"],
-                    (* ops *)
-                    [opeSub, opeMul, opeEq],
-                    (* controller-text *)
-                    [(* set up final return address *)
-                     Assign ("continue", L "fact-done"),
-                     Label "fact-loop",
-                     Test ("=", [R "n", C 1]),
-                     Branch (L "base-case"),
-                     (* Set up for the recursive call by saving n and continue.
-                      * Set up continue so that the computation will continue
-                      * at after-fact when the subroutine returns. *)
-                     Save "continue",
-                     Save "n",
-                     AssignOp ("n", "-", [R "n", C 1]),
-                     Assign ("continue", L "after-fact"),
-                     Goto (L "fact-loop"),
-                     Label "after-fact",
-                     Restore "n",
-                     Restore "continue",
-                     (* val now contains n (n - 1)! *)
-                     AssignOp ("val", "*", [R "n", R "val"]),
-                     (* return to caller *)
-                     Goto (R "continue"),
-                     Label "base-case",
-                     (* base case: 1! = 1 *)
-                     Assign ("val", C 1),
-                     (* return to caller *)
-                     Goto (R "continue"),
-                     Label "fact-done",
-                     Perform ("print-stack-stats", [])])
+      (* registers *)
+      val regs = ["n","val","continue"]
+      (* operators *)
+      val ops = [opeSub, opeMul, opeEq]
+      (* controller-text *)
+      val ctrls =
+          [(* set up final return address *)
+           M.Assign ("continue", M.L "fact-done"),
+           M.Label "fact-loop",
+           M.Test ("=", [M.R "n", M.C 1]),
+           M.Branch (M.L "base-case"),
+           (* Set up for the recursive call by saving n and continue.
+            * Set up continue so that the computation will continue
+            * at after-fact when the subroutine returns. *)
+           M.Save "continue",
+           M.Save "n",
+           M.AssignOp ("n", "-", [M.R "n", M.C 1]),
+           M.Assign ("continue", M.L "after-fact"),
+           M.Goto (M.L "fact-loop"),
+           M.Label "after-fact",
+           M.Restore "n",
+           M.Restore "continue",
+           (* val now contains n (n - 1)! *)
+           M.AssignOp ("val", "*", [M.R "n", M.R "val"]),
+           (* return to caller *)
+           M.Goto (M.R "continue"),
+           M.Label "base-case",
+           (* base case: 1! = 1 *)
+           M.Assign ("val", M.C 1),
+           (* return to caller *)
+           M.Goto (M.R "continue"),
+           M.Label "fact-done",
+           M.Perform ("print-stack-stats", [])]
+      (* machine model *)
+      val m = M.makeMachine (regs, ops, ctrls)
     in
-      setRegisterContents m "n" n;
-      start m;
-      getRegisterContents m "val"
+      M.setRegisterContents m "n" (M.Value n);
+      M.start m;
+      M.getRegisterContents m "val"
     end
 
 fun calcFib n =
     let
-      val m = make ((* registers *)
-                    ["n","val","continue"],
-                    (* ops *)
-                    [opeAdd, opeSub, opeEq, opeLt],
-                    (* controller-text *)
-                    [(* set up final return address *)
-                     Assign ("continue", L "fib-done"),
-                     Label "fib-loop",
-                     Test ("<", [R "n", C 2]),
-                     Branch (L "immediate-answer"),
-                     (* set up to compute Fib(n - 1) *)
-                     Save "continue",
-                     Assign ("continue", L "afterfib-n-1"),
-                     (* save old value of n *)
-                     Save "n",
-                     (* clobber n to n - 1 *)
-                     AssignOp ("n", "-", [R "n", C 1]),
-                     (* perform recursive call *)
-                     Goto (L "fib-loop"),
-                     (* upon return, val contains Fib(n - 1) *)
-                     Label "afterfib-n-1",
-                     Restore "n",
-                     Restore "continue",
-                     (* set up to compute Fib(n - 2) *)
-                     AssignOp ("n", "-", [R "n", C 2]),
-                     Save "continue",
-                     Assign ("continue", L "afterfib-n-2"),
-                     (* save Fib(n - 1) *)
-                     Save "val",
-                     Goto (L "fib-loop"),
-                     (* upon return, val contains Fib(n - 2) *)
-                     Label "afterfib-n-2",
-                     Assign ("n", R "val"),
-                     (* val now contains Fib(n - 1) *)
-                     Restore "val",
-                     Restore "continue",
-                     (* Fib(n - 1) +  Fib(n - 2) *)
-                     AssignOp ("val", "+", [R "val", R "n"]),
-                     (* return to caller, answer is in val *)
-                     Goto (R "continue"),
-                     Label "immediate-answer",
-                     (* base case: Fib(n) = n *)
-                     Assign ("val", R "n"),
-                     Goto (R "continue"),
-                     Label "fib-done",
-                     Perform ("print-stack-stats", [])])
+      (* registers *)
+      val regs = ["n","val","continue"]
+      (* operators *)
+      val ops = [opeAdd, opeSub, opeEq, opeLt]
+      (* controller-text *)
+      val ctrls =
+          [(* set up final return address *)
+           M.Assign ("continue", M.L "fib-done"),
+           M.Label "fib-loop",
+           M.Test ("<", [M.R "n", M.C 2]),
+           M.Branch (M.L "immediate-answer"),
+           (* set up to compute Fib(n - 1) *)
+           M.Save "continue",
+           M.Assign ("continue", M.L "afterfib-n-1"),
+           (* save old value of n *)
+           M.Save "n",
+           (* clobber n to n - 1 *)
+           M.AssignOp ("n", "-", [M.R "n", M.C 1]),
+           (* perform recursive call *)
+           M.Goto (M.L "fib-loop"),
+           (* upon return, val contains Fib(n - 1) *)
+           M.Label "afterfib-n-1",
+           M.Restore "n",
+           M.Restore "continue",
+           (* set up to compute Fib(n - 2) *)
+           M.AssignOp ("n", "-", [M.R "n", M.C 2]),
+           M.Save "continue",
+           M.Assign ("continue", M.L "afterfib-n-2"),
+           (* save Fib(n - 1) *)
+           M.Save "val",
+           M.Goto (M.L "fib-loop"),
+           (* upon return, val contains Fib(n - 2) *)
+           M.Label "afterfib-n-2",
+           M.Assign ("n", M.R "val"),
+           (* val now contains Fib(n - 1) *)
+           M.Restore "val",
+           M.Restore "continue",
+           (* Fib(n - 1) +  Fib(n - 2) *)
+           M.AssignOp ("val", "+", [M.R "val", M.R "n"]),
+           (* return to caller, answer is in val *)
+           M.Goto (M.R "continue"),
+           M.Label "immediate-answer",
+           (* base case: Fib(n) = n *)
+           M.Assign ("val", M.R "n"),
+           M.Goto (M.R "continue"),
+           M.Label "fib-done",
+           M.Perform ("print-stack-stats", [])]
+      (* machine model *)
+      val m = M.makeMachine (regs, ops, ctrls)
     in
-      setRegisterContents m "n" n;
-      start m;
-      getRegisterContents m "val"
+      M.setRegisterContents m "n" (M.Value n);
+      M.start m;
+      M.getRegisterContents m "val"
     end
-
 end;
 
 (*

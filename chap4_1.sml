@@ -46,6 +46,7 @@ sig
   val subr2R : string * (t * t * t list -> t) -> t
   val subr3R : string * (t * t * t * t list -> t) -> t
   val expr : t * t * t -> t
+  val cexpr : ((unit -> unit) ref list) * t -> t
   val inputPort : TextIO.instream -> t
   val outputPort : TextIO.outstream -> t
   val thunk : t * t -> t (* used in chap4_2.sml *)
@@ -73,6 +74,7 @@ sig
   val isStr : t -> bool
   val isSubr : t -> bool
   val isExpr : t -> bool
+  val isCexpr : t -> bool
   val isInputPort : t -> bool
   val isOutputPort : t -> bool
   val isEnv : t -> bool
@@ -133,6 +135,10 @@ sig
   val exprParams : t -> t
   val exprBody : t -> t
   val exprEnv : t -> t
+
+  (* for cexpr (compiled procedure: used in chap5_5.sml) *)
+  val cexprEntry : t -> (unit -> unit) ref list
+  val cexprEnv : t -> t
 
   (* for input/output port *)
   val toInstream : t -> TextIO.instream
@@ -649,6 +655,8 @@ struct
               pSubr obj
             else if Obj.isExpr obj then
               pExpr obj
+            else if Obj.isCexpr obj then
+              pCexpr obj
             else if Obj.isInputPort obj then
               pInputPort obj
             else if Obj.isOutputPort obj then
@@ -680,6 +688,8 @@ struct
               (p " . "; pSubr obj)
             else if Obj.isExpr obj then
               (p " . "; pExpr obj)
+            else if Obj.isCexpr obj then
+              (p " . "; pCexpr obj)
             else if Obj.isInputPort obj then
               (p " . "; pInputPort obj)
             else if Obj.isOutputPort obj then
@@ -720,6 +730,8 @@ struct
                p1 (Syntax.makeLambda (params, body));
                p ">")
             end
+        and pCexpr obj =
+            p "#<CompiledExpr>"
         and pInputPort obj =
             p "#<InputPort>"
         and pOutputPort obj =
@@ -1351,6 +1363,7 @@ struct
              | Str of string
              | Subr of int * string * proc
              | Expr of int * t * t * t
+             | Cexpr of int * (unit -> unit) ref list * t
              | InputPort of int * TextIO.instream
              | OutputPort of int * TextIO.outstream
              | Environment of int * (t, t) Env.t
@@ -1405,6 +1418,7 @@ struct
   val t_str = Sym "string"
   val t_subr = Sym "subr"
   val t_expr = Sym "expr"
+  val t_cexpr = Sym "cexpr"
   val t_input_port = Sym "input-port"
   val t_output_port = Sym "output-port"
   val t_env = Sym "env"
@@ -1468,6 +1482,7 @@ struct
   and subr2R (name, proc) = Subr (inc (), name, Proc2R proc)
   and subr3R (name, proc) = Subr (inc (), name, Proc3R proc)
   and expr (params, body, env) = Expr (inc (), params, body, env)
+  and cexpr (entry, env) = Cexpr (inc (), entry, env)
   and inputPort is = InputPort (inc (), is)
   and outputPort os = OutputPort (inc (), os)
   and environment e = Environment (inc (), e) (* not exported *)
@@ -1490,6 +1505,7 @@ struct
     | atomEq (Num (Real r1), Num (Real r2)) = Real.== (r1, r2)
     | atomEq (Str s1, Str s2) = s1 = s2
     | atomEq (Expr (id1,_,_,_), Expr (id2,_,_,_)) = id1 = id2
+    | atomEq (Cexpr (id1,_,_), Cexpr (id2,_,_)) = id1 = id2
     | atomEq (Subr (id1,_,_), Subr (id2,_,_)) = id1 = id2
     | atomEq (InputPort (id1,_), InputPort (id2,_)) = id1 = id2
     | atomEq (OutputPort (id1,_), OutputPort (id2,_)) = id1 = id2
@@ -1529,6 +1545,8 @@ struct
     | isSubr _ = false
   fun isExpr (Expr _) = true
     | isExpr _ = false
+  fun isCexpr (Cexpr _) = true
+    | isCexpr _ = false
   fun isInputPort (InputPort _) = true
     | isInputPort _ = false
   fun isOutputPort (OutputPort _) = true
@@ -1726,6 +1744,12 @@ struct
     | exprBody obj = typeError (t_expr, obj)
   fun exprEnv (Expr (_,_,_,env)) = env
     | exprEnv obj = typeError (t_expr, obj)
+
+  (* for cexpr (compiled procedure: used in chap5_5.sml) *)
+  fun cexprEntry (Cexpr (_,entry,_)) = entry
+    | cexprEntry obj = typeError (t_cexpr, obj)
+  fun cexprEnv (Cexpr (_,_,env)) = env
+    | cexprEnv obj = typeError (t_cexpr, obj)
 
   (* for input/output port *)
   fun toInstream (InputPort (_,is)) = is
@@ -2249,6 +2273,7 @@ struct
        Obj.subr1 ("string?", Obj.bool o Obj.isStr),
        Obj.subr1 ("subr?", Obj.bool o Obj.isSubr),
        Obj.subr1 ("expr?", Obj.bool o Obj.isExpr),
+       Obj.subr1 ("cexpr?", Obj.bool o Obj.isCexpr),
        Obj.subr1 ("input-port?", Obj.bool o Obj.isInputPort),
        Obj.subr1 ("output-port?", Obj.bool o Obj.isOutputPort),
        Obj.subr0R ("+",

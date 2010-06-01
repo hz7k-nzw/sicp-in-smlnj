@@ -28,8 +28,16 @@ sig
   (* type of user data *)
   type value
 
+  (* type of instruction *)
+  type inst = (unit -> unit) ref
+
+  (* type of register contents *)
+  datatype data
+    = Value of value
+    | Insts of inst list
+
   (* type of operator *)
-  type ope = value list -> value
+  type ope = data list -> data
 
   (* type of parameters for controller-text *)
   datatype param
@@ -52,20 +60,56 @@ sig
   (* type of register machine model *)
   type mm
 
+  (* debug flag *)
+  val debug : bool ref
+
   (* constructs and returns a model of the machine with
    * the given registers, operations, and controller. *)
-  val make : string list * (string * ope) list * ctrl list -> mm
+  val makeMachine : string list * (string * ope) list * ctrl list -> mm
 
   (* simulates the execution of the given machine, starting
    * from the beginning of the controller sequence and stopping
    * when it reaches the end of the sequence. *)
   val start : mm -> unit
 
+  (* transforms the sequence of controller expressions for
+   * a machine into a corresponding list of machine instructions,
+   * each with its execution procedure. *)
+  val assemble : mm -> ctrl list -> inst list
+
+  (* allocate-register *)
+  val allocateReg : mm -> string -> unit
+
+  (* install-instruction-sequence *)
+  val installInsts : mm -> inst list -> unit
+
+  (* install-operations *)
+  val installOps : mm -> (string * ope) list -> unit
+
   (* returns the contents of a simulated register in the given machine. *)
-  val getRegisterContents : mm -> string -> value
+  val getRegisterContents : mm -> string -> data
 
   (* stores a value in a simulated register in the given machine. *)
-  val setRegisterContents : mm -> string -> value -> unit
+  val setRegisterContents : mm -> string -> data -> unit
+
+  (* from function to operator (0-arg) *)
+  val fromFn0 : string * (unit -> value)
+                -> string * ope
+
+  (* from function to operator (1-arg) *)
+  val fromFn1 : string * (value -> value)
+                -> string * ope
+
+  (* from function to operator (2-args) *)
+  val fromFn2 : string * (value * value -> value)
+                -> string * ope
+
+  (* from function to operator (3-args) *)
+  val fromFn3 : string * (value * value * value -> value)
+                -> string * ope
+
+  val printParam : (TextIO.outstream * param) -> unit
+  val printCtrl : (TextIO.outstream * ctrl) -> unit
 end;
 
 signature REGISTER =
@@ -99,6 +143,8 @@ sig
   val undef: value
   (* predicate to test if the specified value is true *)
   val isTrue : value -> bool
+  (* value printer *)
+  val printValue : (TextIO.outstream * value) -> unit
 end;
 
 functor RegisterMachineFn (Conf: REGISTER_MACHINE_CONF)
@@ -106,8 +152,16 @@ functor RegisterMachineFn (Conf: REGISTER_MACHINE_CONF)
 struct
   open Conf
 
+  (* type of instruction *)
+  type inst = (unit -> unit) ref
+
+  (* type of register contents *)
+  datatype data
+    = Value of value
+    | Insts of inst list
+
   (* type of operator *)
-  type ope = value list -> value
+  type ope = data list -> data
 
   (* type of parameters for controller-text *)
   datatype param
@@ -127,17 +181,6 @@ struct
     | Restore of string
     | Perform of string * param list
 
-  (* type of instruction *)
-  type inst = ctrl * (unit -> unit) ref
-
-  (* type of label *)
-  type label = string * inst list
-
-  (* type of register contents *)
-  datatype data
-    = Value of value
-    | Insts of inst list
-
   (* type of register machine model *)
   type mm =
        {PC : inst list Register.t, (* special register: pc *)
@@ -147,9 +190,101 @@ struct
         THE_INSTS : inst list ref,
         THE_OPS : (string * ope) list ref}
 
+  (* debug flag *)
+  val debug : bool ref = ref false
+
   (* dummy proc used to init instruction *)
   val DUMMY_PROC =
       (fn () => raise Fail "DUMMY_PROC should not be called")
+
+  (* print functions *)
+  local
+    val p = TextIO.output
+    val flush = TextIO.flushOut
+    val logOut = TextIO.stdOut
+  in
+  fun printParam (out, R r) =
+      (p (out, "(reg ");
+       p (out,  r);
+       p (out, ")"))
+    | printParam (out, C v) =
+      (p (out, "(const ");
+       printValue (out, v);
+       p (out, ")"))
+    | printParam (out, L l) =
+      (p (out, "(label ");
+       p (out,  l);
+       p (out, ")"))
+
+  fun printParams (out, params) =
+      let
+        fun p1 nil = ()
+          | p1 (param::params) = (printParam (out, param);
+                                  p2 params)
+        and p2 nil = ()
+          | p2 (param::params) = (p (out, " ");
+                                  printParam (out, param);
+                                  p2 params)
+      in
+        p1 params
+      end
+
+  fun printCtrl (out, Label l) =
+      p (out, l)
+    | printCtrl (out, Assign (r, param)) =
+      (p (out, "(assign ");
+       p (out, r);
+       p (out, " ");
+       printParam (out, param);
+       p (out, ")"))
+    | printCtrl (out, AssignOp (r, ope, params)) =
+      (p (out, "(assign ");
+       p (out, r);
+       p (out, " (op ");
+       p (out, ope);
+       p (out, ") ");
+       printParams (out, params);
+       p (out, ")"))
+    | printCtrl (out, Test (ope, params)) =
+      (p (out, "(test ");
+       p (out, "(op ");
+       p (out, ope);
+       p (out, ") ");
+       printParams (out, params);
+       p (out, ")"))
+    | printCtrl (out, Branch param) =
+      (p (out, "(branch ");
+       printParam (out, param);
+       p (out, ")"))
+    | printCtrl (out, Goto param) =
+      (p (out, "(goto ");
+       printParam (out, param);
+       p (out, ")"))
+    | printCtrl (out, Save r) =
+      (p (out, "(save ");
+       p (out, r);
+       p (out, ")"))
+    | printCtrl (out, Restore r) =
+      (p (out, "(restore ");
+       p (out, r);
+       p (out, ")"))
+    | printCtrl (out, Perform (ope, params)) =
+      (p (out, "(perform ");
+       p (out, "(op ");
+       p (out, ope);
+       p (out, ") ");
+       printParams (out, params);
+       p (out, ")"))
+
+  fun log (msg, ctrl) =
+      if !debug then
+        (p (logOut, ";;; "^msg^": ");
+         printCtrl (logOut, ctrl);
+         p (logOut, "\n");
+         flush logOut)
+      else
+        ()
+  end
 
   fun toValue (Value v) = v
     | toValue (Insts _) = raise Fail "Insts specified (expected: Value)"
@@ -178,7 +313,7 @@ struct
   fun installInsts ({THE_INSTS,...}:mm) seq = THE_INSTS := seq
 
   (* install-operations *)
-  fun installOps ({THE_OPS,...}:mm) ops = THE_OPS := (!THE_OPS @ ops)
+  fun installOps ({THE_OPS,...}:mm) ops = THE_OPS := (ops @ (!THE_OPS))
 (*
   (* stack *)
   fun stack ({STACK,...}:mm) = STACK
@@ -194,7 +329,8 @@ struct
           val reg = lookupReg m name
           val proc = makePrimProc m (param, labels)
         in
-          (fn () => (Register.set reg (proc ());
+          (fn () => (log ("exec", ctrl);
+                     Register.set reg (proc ());
                      advancePc PC))
         end
       | AssignOp (name, ope, params) =>
@@ -202,14 +338,16 @@ struct
           val reg = lookupReg m name
           val proc = makeOpeProc m (ope, params, labels)
         in
-          (fn () => (Register.set reg (proc ());
+          (fn () => (log ("exec", ctrl);
+                     Register.set reg (proc ());
                      advancePc PC))
         end
       | Test (ope, params) =>
         let
           val proc = makeOpeProc m (ope, params, labels)
         in
-          (fn () => (Register.set FLAG ((isTrue o toValue o proc) ());
+          (fn () => (log ("exec", ctrl);
+                     Register.set FLAG ((isTrue o toValue o proc) ());
                      advancePc PC))
         end
       | Branch param =>
@@ -218,9 +356,10 @@ struct
            let
              val insts = lookupLabel labels name
            in
-             (fn () => if Register.get FLAG
-                       then Register.set PC insts
-                       else advancePc PC)
+             (fn () => (log ("exec", ctrl);
+                        if Register.get FLAG
+                        then Register.set PC insts
+                        else advancePc PC))
            end
          | R _ => raise Fail "Bad branch (register specified)"
          | C _ => raise Fail "Bad branch (constant specified)"
@@ -231,13 +370,15 @@ struct
            let
              val insts = lookupLabel labels name
            in
-             (fn () => Register.set PC insts)
+             (fn () => (log ("exec", ctrl);
+                        Register.set PC insts))
            end
          | R name =>
            let
              val reg = lookupReg m name
            in
-             (fn () => Register.set PC (toInsts (Register.get reg)))
+             (fn () => (log ("exec", ctrl);
+                        Register.set PC (toInsts (Register.get reg))))
            end
          | C _ => raise Fail "Bad goto (constant specified)"
         )
@@ -245,21 +386,24 @@ struct
         let
           val reg = lookupReg m name
         in
-          (fn () => (Stack.push STACK (Register.get reg);
+          (fn () => (log ("exec", ctrl);
+                     Stack.push STACK (Register.get reg);
                      advancePc PC))
         end
       | Restore name =>
         let
           val reg = lookupReg m name
         in
-          (fn () => (Register.set reg (Stack.pop STACK);
+          (fn () => (log ("exec", ctrl);
+                     Register.set reg (Stack.pop STACK);
                      advancePc PC))
         end
       | Perform (ope, params) =>
         let
           val proc = makeOpeProc m (ope, params, labels)
         in
-          (fn () => (proc (); advancePc PC))
+          (fn () => (log ("exec", ctrl);
+                     proc (); advancePc PC))
         end
       | Label name =>
         raise Fail ("Unexpected label: "^name)
@@ -297,52 +441,52 @@ struct
         val paramToProc =
             (fn param => makePrimProc m (param, labels))
         val procs = map paramToProc params
-        val procToValue =
-            (fn proc => toValue (proc ()))
+        val procToData =
+            (fn proc => proc ())
       in
-        (fn () => Value (ope (map procToValue procs)))
+        (fn () => ope (map procToData procs))
       end
 
   (* assemble *)
   fun assemble m ctrls =
       let
-        fun receive (insts, labels) =
-            (updateInsts m (insts, labels); insts)
+        fun receive (srcs, insts, labels) =
+            (updateInsts m (srcs, insts, labels); insts)
       in
         extractLabels ctrls receive
       end
 
   (* extract-labels *)
-  and extractLabels nil receive = receive (nil, nil)
+  and extractLabels nil receive = receive (nil, nil, nil)
     | extractLabels (ctrl::ctrls) receive =
       let
-        fun receive' (insts, labels) =
+        fun receive' (srcs, insts, labels) =
             case ctrl of
               Label name =>
-              receive (insts, (name, insts)::labels)
+              receive (srcs, insts, (name, insts)::labels)
             | _ =>
-              receive ((ctrl, ref DUMMY_PROC)::insts, labels)
+              receive (ctrl::srcs, (ref DUMMY_PROC)::insts, labels)
       in
         extractLabels ctrls receive'
       end
 
   (* update-insts *)
-  and updateInsts m (insts, labels) =
+  and updateInsts m (srcs, insts, labels) =
       let
-        fun updator (ctrl, procRef) =
+        fun updator (src, procRef) =
             let
-              val proc = makeExecProc m (ctrl, labels)
+              val proc = makeExecProc m (src, labels)
             in
               procRef := proc
             end
       in
-        app updator insts
+        ListPair.appEq updator (srcs, insts)
       end
 
   (* make-machine *)
-  fun make (regNames, ops, ctrls) : mm =
+  fun makeMachine (regNames, ops, ctrls) : mm =
       let
-        val m = makeNew ()
+        val m = makeNewMachine ()
       in
         app (fn regName => allocateReg m regName) regNames;
         installOps m ops;
@@ -351,7 +495,7 @@ struct
       end
 
   (* make-new-machine *)
-  and makeNew unit : mm =
+  and makeNewMachine unit : mm =
       let
         val pc = Register.make "pc"
         val flag = Register.make "flag"
@@ -359,9 +503,9 @@ struct
         val reg_table = nil
         val insts = nil
         val ops = [("initialize-stack",
-                    (fn _ => (Stack.initialize stack; undef))),
+                    (fn _ => (Stack.initialize stack; Value undef))),
                    ("print-stack-stats",
-                    (fn _ => (Stack.printStats stack; undef)))]
+                    (fn _ => (Stack.printStats stack; Value undef)))]
       in
         {PC = pc,
          FLAG = flag,
@@ -379,7 +523,7 @@ struct
   and execute (m as {PC,...}:mm) =
       case Register.get PC of
         nil => ()
-      | ((_, procRef)::insts) =>
+      | (procRef::insts) =>
         let
           val proc = !procRef
         in
@@ -391,7 +535,7 @@ struct
         let
           val reg = lookupReg m name
         in
-          toValue (Register.get reg)
+          Register.get reg
         end
 
   (* set-register-contents! *)
@@ -399,40 +543,37 @@ struct
         let
           val reg = lookupReg m name
         in
-          (fn value => Register.set reg (Value value))
+          (fn data => Register.set reg data)
         end
-end;
 
-structure Ope =
-struct
-  fun fromFn0 (name: string, f: unit -> 'a)
-      : string * ('a list -> 'a) =
+  fun fromFn0 (name: string, f: unit -> value)
+      : string * ope =
       let
-        fun ope [] = f ()
+        fun ope [] = Value (f ())
           | ope _ = raise Fail ("Unexpected arguments: "^name)
       in
         (name, ope)
       end
-  fun fromFn1 (name: string, f: 'a -> 'a)
-      : string * ('a list -> 'a) =
+  fun fromFn1 (name: string, f: value -> value)
+      : string * ope =
       let
-        fun ope [n1] = f n1
+        fun ope [n1] = Value (f (toValue n1))
           | ope _ = raise Fail ("Unexpected arguments: "^name)
       in
         (name, ope)
       end
-  fun fromFn2 (name:string, f: 'a * 'a -> 'a)
-      : string * ('a list -> 'a) =
+  fun fromFn2 (name:string, f: value * value -> value)
+      : string * ope =
       let
-        fun ope [n1,n2] = f (n1,n2)
+        fun ope [n1,n2] = Value (f (toValue n1, toValue n2))
           | ope _ = raise Fail ("Unexpected arguments: "^name)
       in
         (name, ope)
       end
-  fun fromFn3 (name:string, f: 'a * 'a * 'a -> 'a)
-      : string * ('a list -> 'a) =
+  fun fromFn3 (name:string, f: value * value * value -> value)
+      : string * ope =
       let
-        fun ope [n1,n2,n3] = f (n1,n2,n3)
+        fun ope [n1,n2,n3] = Value (f (toValue n1, toValue n2, toValue n3))
           | ope _ = raise Fail ("Unexpected arguments: "^name)
       in
         (name, ope)
