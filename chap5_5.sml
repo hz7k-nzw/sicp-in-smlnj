@@ -14,6 +14,10 @@ structure R = Util.Real;
 (* 5.5.1  Structure of the Compiler *)
 (* 5.5.2  Compiling Expressions *)
 (* 5.5.3  Compiling Combinations *)
+(* 5.5.4  Combining Instruction Sequences *)
+(* 5.5.5  An Example of Compiled Code *)
+(* 5.5.6  Lexical Addressing *)
+(* 5.5.7  Interfacing Compiled Code to the Evaluator *)
 
 signature LISP_COMPILER =
 sig
@@ -329,7 +333,7 @@ struct
       else
         case linkage of
           Return =>
-          (* target != val && linkage == Label *)
+          (* target != val && linkage == Return *)
           raise Obj.Error ("Return linkage, target not val: "^
                            target, nil)
         | Label name =>
@@ -469,24 +473,30 @@ fun compileAndDump () =
       handle e => ignore (Printer.printException (stdErr rt, e))
     end
 
-(* explicit-control evaluator with compile-and-run *)
+(* Exercise 5.48. (explicit-control evaluator with compile-and-run) *)
 fun startRepl' debug =
     let
       val (rt, m) = make ()
-      fun opeCompile name =
-        (name,
-         (fn [M.Value exp] =>
-             let
-               val (_,_,statements) =
-                   Compiler.compile exp "val" Compiler.return
-               val insts = M.assemble m statements
-             in
-               M.Insts insts
-             end
-           | _ => raise Fail ("Unexpected arguments: "^name)))
+      val ops =
+          [("compile",
+            (fn [M.Value exp] =>
+                let
+                  val obj as (_,_,statements) =
+                      Compiler.compile exp "val" Compiler.return
+                  val insts = M.assemble m statements
+                  fun debugDump () =
+                      if !M.debug then
+                        let val out = Obj.toOutstream (stdOut rt)
+                        in Compiler.dump (out, obj) end
+                      else ()
+                in
+                  debugDump ();
+                  M.Insts insts
+                end
+              | _ => raise Fail ("Unexpected arguments: compile")))]
     in
       M.debug := debug;
-      addOps m [opeCompile "compile"];
+      addOps m ops;
       M.start m
       handle e => ignore (Printer.printException (stdErr rt, e))
     end
@@ -498,7 +508,202 @@ end;
  *)
 
 (*
+ * [startRepl' supports compile-and-run feature]
  * Lisp expressions can be compiled by executing
  * the following at the lisp top-level:
  * :c <exp>  ; <exp> means any lisp expression
+ *)
+
+structure LispRegisterMachineAndCompiler
+          : sig
+            include LISP_REGISTER_MACHINE
+            structure Compiler : LISP_COMPILER
+            end =
+struct
+  open DefaultLispRuntime
+
+  local
+    structure Conf : REGISTER_MACHINE_CONF =
+    struct
+      structure Register = Register
+      structure Stack = Stack'
+      type value = Obj.t
+      val undef = Obj.undef
+      val isTrue = Obj.isTrue
+      val printValue =
+       fn (s, v) => ignore (Printer.print (Obj.outputPort s, v))
+    end
+  in
+  structure M = RegisterMachineFn (Conf)
+  structure Compiler
+    = LispCompilerFn (structure Obj = Obj and Syntax = Syntax and M = M)
+  end
+
+  (* constants *)
+  val quit = Obj.sym ":q"
+  val inputPrompt = Obj.str ";;; EC-Eval input:"
+  val outputPrompt = Obj.str ";;; EC-Eval value:"
+
+  (* registers ("exp", "unev" => not used!) *)
+  val regs =
+      ["env", "val", "continue", "proc", "argl"]
+
+  (* operators *)
+  local
+    (* special operators *)
+    fun opeMakeCompProc name =
+        (name, (fn [M.Insts i, M.Value v] => M.Value (Obj.cexpr (i, v))
+                 | _ => raise Fail ("Unexpected arguments: "^name)))
+    fun opeCompProcEntry name =
+        (name, (fn [M.Value v] => M.Insts (Obj.cexprEntry v)
+                 | _ => raise Fail ("Unexpected arguments: "^name)))
+    fun opeList name =
+        (name, (fn args =>
+                   let
+                     fun f nil = Obj.null
+                       | f (M.Value v::args) = Obj.cons (v, f args)
+                       | f _ = raise Fail ("Unexpected arguments: "^name)
+                   in
+                     M.Value (f args)
+                   end))
+  in
+  val ops =
+      [M.fromFn2 ("lookup-variable-value",
+                  (fn (exp, env) => Obj.lookupEnv env exp)),
+       M.fromFn3 ("set-variable-value!",
+                  (fn (var, valu, env) =>
+                      (Obj.setEnv env (var, valu); var))),
+       M.fromFn3 ("define-variable!",
+                  (fn (var, valu, env) =>
+                      (Obj.defineEnv env (var, valu); var))),
+       M.fromFn1 ("true?",
+                  Obj.bool o Obj.isTrue),
+       M.fromFn1 ("false?",
+                  Obj.bool o Obj.isFalse),
+       M.fromFn2 ("eq?",
+                  Obj.bool o Obj.eq),
+       M.fromFn2 ("equal?",
+                  Obj.bool o Obj.equal),
+       opeList "list",
+       M.fromFn2 ("cons", Obj.cons),
+       M.fromFn1 ("primitive-procedure?",
+                  Obj.bool o Obj.isSubr),
+       M.fromFn1 ("compound-procedure?",
+                  Obj.bool o Obj.isExpr),
+       M.fromFn1 ("compiled-procedure?",
+                  Obj.bool o Obj.isCexpr),
+       M.fromFn2 ("apply-primitive-procedure",
+                  (fn (proc, args) =>
+                      Obj.applySubr proc (Obj.toList args))),
+       M.fromFn3 ("make-procedure",
+                  Obj.expr),
+       M.fromFn1 ("procedure-parameters",
+                  Obj.exprParams),
+       M.fromFn1 ("procedure-environment",
+                  Obj.exprEnv),
+       M.fromFn1 ("procedure-body",
+                  Obj.exprBody),
+       opeMakeCompProc "make-compiled-procedure",
+       opeCompProcEntry "compiled-procedure-entry",
+       M.fromFn1 ("compiled-procedure-env",
+                  Obj.cexprEnv),
+       M.fromFn3 ("extend-environment",
+                  (fn (vars, vals, env) =>
+                      Obj.extendEnv env (Obj.toList vars,
+                                         Obj.toList vals)))]
+  end
+
+  (* control-text *)
+  val ctrls =
+      [M.Label "read-compile-execute-print-loop",
+       M.Perform ("initialize-stack", []),
+       M.Perform ("prompt-for-input", [M.C inputPrompt]),
+       M.AssignOp ("val", "read", []),
+       M.Test ("eq?", [M.R "val", M.C Obj.eof]), (* eof? *)
+       M.Branch (M.L "return-from-read-compile-execute-print-loop"),
+       M.Test ("eq?", [M.R "val", M.C quit]), (* :q? *)
+       M.Branch (M.L "return-from-read-compile-execute-print-loop"),
+       M.AssignOp ("val", "compile", [M.R "val"]),
+       M.AssignOp ("env", "get-global-environment", []),
+       M.Assign ("continue", M.L "print-result"),
+       M.Goto (M.R "val"),
+       M.Label "print-result",
+       M.Perform ("print-stack-stats", []),
+       M.Perform ("announce-output", [M.C outputPrompt]),
+       M.Perform ("user-print", [M.R "val"]),
+       M.Goto (M.L "read-compile-execute-print-loop"),
+       M.Label "return-from-read-compile-execute-print-loop"]
+
+  fun make () =
+      let
+        (* lisp runtime *)
+        val rt = makeRuntime ()
+        (* machine model with empty ops and empty ctrls *)
+        val m = M.makeMachine (regs, nil, nil)
+        (* operators that depend on rt or m *)
+        val ops' =
+            [M.fromFn1 ("prompt-for-input",
+                        (fn msg =>
+                            (Printer.format (stdOut rt,
+                                             Obj.toString msg, nil);
+                             Printer.terpri (stdOut rt);
+                             Obj.undef))),
+             M.fromFn0 ("read",
+                        (fn () => Reader.read (stdIn rt))),
+             M.fromFn0 ("get-global-environment",
+                        (fn () => env rt)),
+             M.fromFn1 ("announce-output",
+                        (fn msg =>
+                            (Printer.format (stdOut rt,
+                                             Obj.toString msg, nil);
+                             Printer.terpri (stdOut rt);
+                             Obj.undef))),
+             M.fromFn1 ("user-print",
+                        (fn obj =>
+                            (Printer.print (stdOut rt, obj);
+                             Printer.terpri (stdOut rt);
+                             Obj.undef))),
+             ("compile",
+              (fn [M.Value exp] =>
+                  let
+                    val obj as (_,_,statements) =
+                        Compiler.compile exp "val" Compiler.return
+                    val insts = M.assemble m statements
+                    fun debugDump () =
+                        if !M.debug then
+                          let val out = Obj.toOutstream (stdOut rt)
+                          in Compiler.dump (out, obj) end
+                        else ()
+                  in
+                    debugDump ();
+                    M.Insts insts
+                  end
+                | _ => raise Fail ("Unexpected arguments: compile")))]
+      in
+        M.installOps m (ops' @ ops);
+        M.installInsts m (M.assemble m ctrls);
+        (rt, m)
+      end
+
+  and addOps m ops =
+      (M.installOps m ops;
+       M.installInsts m (M.assemble m ctrls)) (* rebuild insts *)
+end;
+
+local
+  open LispRegisterMachineAndCompiler
+in
+(* Exercise 5.49. (read-compile-execute-print-loop) *)
+fun startRepl'' debug =
+    let
+      val (rt, m) = make ()
+    in
+      M.debug := debug;
+      M.start m
+      handle e => ignore (Printer.printException (stdErr rt, e))
+    end
+end;
+
+(*
+ * startRepl'' <debug>; (* => activates top-level *)
  *)
