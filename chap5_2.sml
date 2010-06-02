@@ -408,16 +408,19 @@ struct
       | Label name =>
         raise Fail ("Unexpected label: "^name)
 
+  (* lookup-label *)
   and lookupLabel labels name : inst list =
       case U.assoc name labels of
         SOME (_, insts) => insts
       | NONE => raise Fail ("Unknown label: "^name)
 
+  (* advance-pc *)
   and advancePc pc =
       case Register.get pc of
        (_::insts) => Register.set pc insts
      | nil => raise Fail "Empty insts: PC"
 
+  (* make-primitive-exp *)
   and makePrimProc m (param, labels) =
       case param of
         C value =>
@@ -435,6 +438,7 @@ struct
           (fn () => Register.get reg)
         end
 
+  (* make-operation-exp *)
   and makeOpeProc m (name, params, labels) =
       let
         val ope = lookupOpe m name
