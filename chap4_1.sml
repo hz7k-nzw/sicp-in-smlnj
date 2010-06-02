@@ -665,6 +665,8 @@ struct
               pEnv obj
             else if Obj.isUndef obj then
               pUndef obj
+            else if Obj.isEof obj then
+              pEof obj
             else if Obj.isThunk obj then
               pThunk obj
             else
@@ -698,6 +700,8 @@ struct
               (p " . "; pEnv obj)
             else if Obj.isUndef obj then
               (p " . "; pUndef obj)
+            else if Obj.isEof obj then
+              (p " . "; pEof obj)
             else if Obj.isThunk obj then
               (p " . "; pThunk obj)
             else
@@ -740,6 +744,8 @@ struct
             p "#<Env>"
         and pUndef obj =
             p "#<Undef>"
+        and pEof obj =
+            p "#<Eof>"
         and pThunk obj =
             let
               val evaluated = Obj.isEvaluated obj
